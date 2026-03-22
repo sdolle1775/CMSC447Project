@@ -1,0 +1,6 @@
+*
+!.gitignore
+!/htdocs
+!/htdocs/**
+!/database
+!/database/**
