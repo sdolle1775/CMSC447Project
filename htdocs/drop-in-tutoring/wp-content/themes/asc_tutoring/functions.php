@@ -312,6 +312,7 @@ function m_get_events_data($eventsObj) {
     return [array_values($eventTypes), $mEvents];
 }
 
+
 //---------------------------------------------------------------------------------------------------------------------
 add_action('wp_enqueue_scripts', function() {
     wp_enqueue_script(
@@ -327,6 +328,7 @@ add_action('wp_enqueue_scripts', function() {
         'root'  => esc_url_raw(rest_url()),
     ]);
 });
+
 
 // Schedule REST API
 add_action('rest_api_init', function() {
@@ -414,6 +416,7 @@ add_action('rest_api_init', function() {
     ],
 ]);
 });
+
 
 // Events REST API
 add_action('rest_api_init', function() {
@@ -505,6 +508,7 @@ add_action('rest_api_init', function() {
         ],
     ]);
 });
+
 
 // Users REST API
 add_action('rest_api_init', function() {
@@ -616,16 +620,6 @@ function sanitize_date_field($date) {
     return $date->format('Y-m-d');
 }
 
-function is_email($email) {
-    if (!filter_var($v, FILTER_VALIDATE_EMAIL)) {
-        return new WP_Error(
-            'invalid_email',
-            "$email is not a valid email address",
-            ['status' => 400]
-        );
-    }
-    return true;
-}
 
 function is_umbc_id($id) {
     if (!preg_match('/^[A-Z]{2}\d{5}$/', $id)) {
@@ -637,6 +631,7 @@ function is_umbc_id($id) {
     }
     return true;
 }
+
 
 function create_schedule(WP_REST_Request $request) {
     global $wpdb;
@@ -779,7 +774,7 @@ function create_event(WP_REST_Request $request) {
     $result = $wpdb->insert(
         'events',
         [
-            '$event_type' => $event_type
+            '$event_type' => $event_type,
             'user_id'     => $user_id,
             'start_day'   => $start_day,
             'final_day' => $final_day,
@@ -846,7 +841,7 @@ function update_event(WP_REST_Request $request) {
     $result = $wpdb->update(
         'events',
         [
-            '$event_type' => $event_type
+            '$event_type' => $event_type,
             'user_id'     => $user_id,
             'start_day'   => $start_day,
             'final_day' => $final_day,
