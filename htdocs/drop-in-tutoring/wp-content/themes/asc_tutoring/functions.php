@@ -667,6 +667,24 @@ add_action('rest_api_init', function() {
                 'validate_callback' => 'validate_numeric_param',
                 'sanitize_callback' => 'absint'
             ],
+            'user_login' => [
+                'required'          => true,
+                'validate_callback' => 'is_umbc_id',
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'user_email' => [
+                'required'          => true,
+                'validate_callback' => 'is_email',
+                'sanitize_callback' => 'sanitize_email',
+            ],
+            'first_name' => [
+                'required'          => true,
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'last_name' => [
+                'required'          => true,
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
             'roles' => [
                 'required'          => true,
                 'validate_callback' => 'validate_roles'
@@ -1303,9 +1321,15 @@ function delete_account(WP_REST_Request $request) {
 
 function update_account(WP_REST_Request $request) {
     global $wpdb;
-    $user_id = $request->get_param('user_id');
+
+    $user_id     = $request->get_param('user_id');
     $curr_user_id = get_current_user_id();
-    $roles = $request->get_param('roles');
+
+    $user_login  = $request->get_param('user_login');
+    $user_email  = $request->get_param('user_email');
+    $first_name  = $request->get_param('first_name');
+    $last_name   = $request->get_param('last_name');
+    $roles       = $request->get_param('roles');
 
     if ($user_id == $curr_user_id) {
         return new WP_Error('invalid_user_id', 'Cannot modify the current user', ['status' => 400]);
@@ -1316,19 +1340,30 @@ function update_account(WP_REST_Request $request) {
         return new WP_Error('user_not_found', 'User does not exist.', ['status' => 404]);
     }
 
-    $was_tutor = false;
-    if (in_array('tutor', $user->roles)) {
-        $was_tutor = true;
-    }
+    $was_tutor = in_array('tutor', $user->roles, true);
 
     $wpdb->query('START TRANSACTION');
 
+    $updated = wp_update_user([
+        'ID'         => $user_id,
+        'user_login' => $user_login,
+        'user_email' => $user_email,
+        'first_name' => $first_name,
+        'last_name'  => $last_name,
+    ]);
+
+    if (is_wp_error($updated)) {
+        $wpdb->query('ROLLBACK');
+        return new WP_Error('db_error', $updated->get_error_message(), ['status' => 500]);
+    }
+
+    $user = new WP_User($user_id);
     $user->set_role($roles[0]);
-    if (count($roles) == 2) {
+    if (count($roles) === 2) {
         $user->add_role($roles[1]);
     }
 
-    if (!in_array('tutor', $roles) && $was_tutor) {
+    if (!in_array('tutor', $roles, true) && $was_tutor) {
         $cleaned = clean_up_user($user_id);
         if (is_wp_error($cleaned)) {
             $wpdb->query('ROLLBACK');
@@ -1390,31 +1425,31 @@ function db_connect_root($dbName) {
 // umbc_db REST API
 add_action('rest_api_init', function() {
     register_rest_route('asc-tutoring/v1', '/umbc_db/accounts', [
-        'methods'             => 'GET',
-        'callback'            => 'get_umbc_accounts',
-        'permission_callback' => function() {
-            return current_user_can('admin_control');
-        },
-        'args' => [
-            'search_str' => [
-                'required'          => true,
-                'validate_callback' => 'is_string',
-                'sanitize_callback' => 'sanitize_text_field',
-            ]
-        ],
-    ]);
+    'methods'             => 'GET',
+    'callback'            => 'get_umbc_accounts',
+    'permission_callback' => function() {
+        return current_user_can('admin_control');
+    },
+    'args' => [
+        'search_str' => [
+            'required'          => false,
+            'sanitize_callback' => 'sanitize_text_field',
+            'default'           => '',
+        ]
+    ],
+]);
 
     register_rest_route('asc-tutoring/v1', '/umbc_db/courses', [
         'methods'             => 'GET',
-        'callback'            => 'get_umbc_courses',
+        'callback'            => 'get_courses_accounts',
         'permission_callback' => function() {
             return current_user_can('admin_control');
         },
         'args' => [
             'search_str' => [
-                'required'          => true,
-                'validate_callback' => 'is_string',
+                'required'          => false,
                 'sanitize_callback' => 'sanitize_text_field',
+                'default'           => '',
             ]
         ],
     ]);
@@ -1422,36 +1457,47 @@ add_action('rest_api_init', function() {
 
 
 function get_courses_accounts(WP_REST_Request $request) {
-    $search_str = $request->get_param('search_str');
-
-    if (strlen($search_str) < 1) {
-        return new WP_Error('invalid_param', 'search_str cannot be empty or whitespace.', ['status' => 400]);
-    }
+    $search_str = trim((string) $request->get_param('search_str'));
 
     $umbcPdo = db_connect_root('umbc_db');
+
     try {
-        $stmt = $umbcPdo->prepare("SELECT 
-                                       c.course_id,
-                                       c.course_subject,
-                                       s.subject_name,
-                                       c.course_code,
-                                       c.course_name
-                                   FROM umbc_courses c
-                                   JOIN umbc_subjects s ON c.course_subject = s.subject_code
-                                   WHERE 
-                                       c.course_subject LIKE :search
-                                       OR s.subject_name LIKE :search
-                                       OR c.course_code LIKE :search
-                                       OR c.course_name LIKE :search
-                                   ORDER BY c.course_subject, c.course_code");
+        if ($search_str === '') {
+            $stmt = $umbcPdo->prepare("
+                SELECT 
+                    c.course_id,
+                    c.course_subject,
+                    s.subject_name,
+                    c.course_code,
+                    c.course_name
+                FROM umbc_courses c
+                JOIN umbc_subjects s 
+                    ON c.course_subject = s.subject_code
+                ORDER BY c.course_subject, c.course_code
+            ");
+            $stmt->execute();
+        } else {
+            $stmt = $umbcPdo->prepare("
+                SELECT 
+                    c.course_id,
+                    c.course_subject,
+                    s.subject_name,
+                    c.course_code,
+                    c.course_name
+                FROM umbc_courses c
+                JOIN umbc_subjects s 
+                    ON c.course_subject = s.subject_code
+                WHERE 
+                    c.course_subject LIKE :search
+                    OR s.subject_name LIKE :search
+                    OR c.course_code LIKE :search
+                    OR c.course_name LIKE :search
+                ORDER BY c.course_subject, c.course_code
+            ");
 
-        if (!$stmt) {
-            error_log('UMBC course search: Failed to prepare statement.');
-            return new WP_Error('db_error', 'Query preparation failed.', ['status' => 500]);
+            $stmt->bindValue(':search', '%' . $search_str . '%', PDO::PARAM_STR);
+            $stmt->execute();
         }
-
-        $stmt->bindValue(':search', '%' . $search_str . '%', PDO::PARAM_STR);
-        $stmt->execute();
 
         $umbc_courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -1459,39 +1505,45 @@ function get_courses_accounts(WP_REST_Request $request) {
         return new WP_Error('db_error', 'Failed to retrieve courses.', ['status' => 500]);
     }
 
-    return rest_ensure_response(['success' => true, 'umbc_courses' => $umbc_courses]);
+    return rest_ensure_response([
+        'success' => true,
+        'umbc_courses' => $umbc_courses
+    ]);
 }
 
 
 function get_umbc_accounts(WP_REST_Request $request) {
-    $search_str = $request->get_param('search_str');
-
-    if (strlen($search_str) < 1) {
-        return new WP_Error('invalid_param', 'search_str cannot be empty or whitespace.', ['status' => 400]);
-    }
+    $search_str = trim((string) $request->get_param('search_str'));
 
     $umbcPdo = db_connect_root('umbc_db');
+
     try {
-        $stmt = $umbcPdo->prepare("SELECT
-                                       umbc_id,
-                                       first_name,
-                                       last_name,
-                                       umbc_email
-                                   FROM umbc_accounts
-                                   WHERE
-                                       umbc_id LIKE :search
-                                       OR first_name LIKE :search
-                                       OR last_name LIKE :search
-                                       OR umbc_email LIKE :search
-                                   ORDER BY last_name, first_name");
+        if ($search_str === '') {
+            $stmt = $umbcPdo->prepare("SELECT
+                                           umbc_id,
+                                           first_name,
+                                           last_name,
+                                           umbc_email
+                                       FROM umbc_accounts
+                                       ORDER BY last_name, first_name, umbc_id");
+            $stmt->execute();
+        } else {
+            $stmt = $umbcPdo->prepare("SELECT
+                                           umbc_id,
+                                           first_name,
+                                           last_name,
+                                           umbc_email
+                                       FROM umbc_accounts
+                                       WHERE
+                                           umbc_id LIKE :search
+                                           OR first_name LIKE :search
+                                           OR last_name LIKE :search
+                                           OR umbc_email LIKE :search
+                                       ORDER BY last_name, first_name, umbc_id");
 
-        if (!$stmt) {
-            error_log('UMBC account search: Failed to prepare statement.');
-            return new WP_Error('db_error', 'Query preparation failed.', ['status' => 500]);
+            $stmt->bindValue(':search', '%' . $search_str . '%', PDO::PARAM_STR);
+            $stmt->execute();
         }
-
-        $stmt->bindValue(':search', '%' . $search_str . '%', PDO::PARAM_STR);
-        $stmt->execute();
 
         $accounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
