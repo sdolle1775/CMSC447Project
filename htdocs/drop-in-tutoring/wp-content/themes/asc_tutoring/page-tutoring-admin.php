@@ -226,6 +226,13 @@ foreach ($eventTypes as $eventType) {
                 </div>
 
                 <div>
+                  <label for="schedule_course_lookup"><strong>Select Course</strong></label>
+                  <select id="schedule_course_lookup" name="schedule_course_lookup">
+                    <option value="">Select a course</option>
+                  </select>
+                </div>
+
+                <div>
                   <label for="schedule_course_id"><strong>Course ID</strong></label>
                   <input type="number" id="schedule_course_id" name="course_id" required />
                 </div>
@@ -340,6 +347,15 @@ foreach ($eventTypes as $eventType) {
 
               <div class="admin-grid">
                 <div>
+                  <label for="account_lookup_results"><strong>Select UMBC Account</strong></label>
+                  <select id="account_lookup_results" name="account_lookup_results">
+                    <option value="">Select an account</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="admin-grid">
+                <div>
                   <label for="user_login"><strong>UMBC ID</strong></label>
                   <input type="text" id="user_login" name="user_login" placeholder="AB12345" />
                 </div>
@@ -401,7 +417,7 @@ foreach ($eventTypes as $eventType) {
                       <td><?php echo esc_html($user['user_email']); ?></td>
                       <td><?php echo esc_html($user['roles'] ?? '—'); ?></td>
                       <td>
-                        <button type="button" class="button button-secondary admin-edit-account">Edit Roles</button>
+                        <button type="button" class="button button-secondary admin-edit-account">Edit</button>
                         <button type="button" class="button button-secondary admin-delete-account">Delete</button>
                       </td>
                     </tr>
@@ -496,6 +512,12 @@ foreach ($eventTypes as $eventType) {
 .tutoring-admin-message.error {
   background: #ffebee;
   color: #b71c1c;
+}
+
+.account-field-locked {
+  background: #f3f4f6;
+  color: #666;
+  cursor: not-allowed;
 }
 </style>
 

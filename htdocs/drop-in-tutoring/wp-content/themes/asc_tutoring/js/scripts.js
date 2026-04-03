@@ -452,30 +452,260 @@ document.addEventListener('DOMContentLoaded', () => {
   const scheduleForm = document.getElementById('schedule-form');
   const eventForm = document.getElementById('event-form');
   const accountForm = document.getElementById('account-form');
+  const scheduleCourseLookup = document.getElementById('schedule_course_lookup');
 
-  document.getElementById('reset-schedule-form')?.addEventListener('click', () => scheduleForm.reset());
-  document.getElementById('reset-event-form')?.addEventListener('click', () => eventForm.reset());
-  document.getElementById('reset-account-form')?.addEventListener('click', () => accountForm.reset());
+  const scheduleCourseFieldIds = [
+    'schedule_user_id',
+    'schedule_course_id',
+    'schedule_day_of_week',
+    'schedule_start_time',
+    'schedule_end_time',
+    'course_subject',
+    'subject_name',
+    'course_code',
+    'course_name'
+  ];
 
-  document.querySelectorAll('.admin-edit-schedule').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const row = e.target.closest('tr');
-      document.getElementById('schedule_id').value = row.dataset.scheduleId;
-      document.getElementById('schedule_user_id').value = row.dataset.userId;
-      document.getElementById('schedule_course_id').value = row.dataset.courseId;
-      const dayMap = {
-        MON: 'Monday',
-        TUE: 'Tuesday',
-        WED: 'Wednesday',
-        THU: 'Thursday',
-        FRI: 'Friday'
-      };
-      document.getElementById('schedule_day_of_week').value = dayMap[row.dataset.dayOfWeek] || '';
-      document.getElementById('schedule_start_time').value = row.dataset.startTime;
-      document.getElementById('schedule_end_time').value = row.dataset.endTime;
-      showMessage(`Loaded schedule ${row.dataset.scheduleId} into the form.`, 'success');
+  const accountLookupResults = document.getElementById('account_lookup_results');
+
+  const accountFieldIds = ['user_login', 'user_email', 'first_name', 'last_name'];
+
+  const fillAccountFormFromUmbc = (account) => {
+    document.getElementById('user_login').value = account.umbc_id || '';
+    document.getElementById('user_email').value = account.umbc_email || '';
+    document.getElementById('first_name').value = account.first_name || '';
+    document.getElementById('last_name').value = account.last_name || '';
+  };
+
+  const clearAccountTextFields = () => {
+    accountFieldIds.forEach((id) => {
+      const field = document.getElementById(id);
+      if (field) field.value = '';
     });
+  };
+
+  const setAccountFieldsEditable = (editable) => {
+    accountFieldIds.forEach((id) => {
+      const field = document.getElementById(id);
+      if (!field) return;
+      field.readOnly = !editable;
+      field.disabled = false;
+      field.classList.toggle('account-field-locked', !editable);
+    });
+  };
+
+  const setRolesEditable = (editable) => {
+    accountForm.querySelectorAll('input[name="roles[]"]').forEach((cb) => {
+      cb.disabled = !editable;
+    });
+  };
+
+  const setAccountFormMode = (mode) => {
+    const isEditMode = mode === 'edit';
+
+    if (accountLookupResults) {
+      accountLookupResults.disabled = isEditMode;
+    }
+
+    if (isEditMode) {
+      setAccountFieldsEditable(true);
+      setRolesEditable(true);
+      return;
+    }
+
+    const hasSelectedAccount = !!(accountLookupResults && accountLookupResults.value);
+
+    setAccountFieldsEditable(false);
+    setRolesEditable(hasSelectedAccount);
+
+    if (!hasSelectedAccount) {
+      clearAccountTextFields();
+    }
+  };
+
+  const resetUmbcLookupDropdown = (message = 'Select an account') => {
+    if (!accountLookupResults) return;
+    accountLookupResults.innerHTML = `<option value="">${message}</option>`;
+    accountLookupResults.disabled = false;
+  };
+
+const fillScheduleFormFromCourse = (course) => {
+  document.getElementById('schedule_course_id').value = course.course_id || '';
+};
+
+const clearScheduleCourseFields = () => {
+  scheduleCourseFieldIds.forEach((id) => {
+    const field = document.getElementById(id);
+    if (field) field.value = '';
   });
+};
+
+const setScheduleCourseFieldsEditable = (editable) => {
+  scheduleCourseFieldIds.forEach((id) => {
+    const field = document.getElementById(id);
+    if (!field) return;
+    field.readOnly = !editable;
+    field.disabled = false;
+    field.classList.toggle('account-field-locked', !editable);
+  });
+};
+
+const setScheduleFormMode = (mode) => {
+  const isEditMode = mode === 'edit';
+
+  if (scheduleCourseLookup) {
+    scheduleCourseLookup.disabled = isEditMode;
+  }
+
+  if (isEditMode) {
+    setScheduleCourseFieldsEditable(true);
+    return;
+  }
+
+  const hasSelectedCourse = !!(scheduleCourseLookup && scheduleCourseLookup.value);
+
+  setScheduleCourseFieldsEditable(hasSelectedCourse);
+
+  if (!hasSelectedCourse) {
+    clearScheduleCourseFields();
+  } else {
+    const courseIdField = document.getElementById('schedule_course_id');
+    if (courseIdField) {
+      courseIdField.readOnly = true;
+      courseIdField.classList.add('account-field-locked');
+    }
+  }
+};
+
+const resetScheduleCourseDropdown = (message = 'Select a course') => {
+  if (!scheduleCourseLookup) return;
+  scheduleCourseLookup.innerHTML = `<option value="">${message}</option>`;
+  scheduleCourseLookup.disabled = false;
+};
+
+const loadUmbcCoursesDropdown = async () => {
+  if (!scheduleCourseLookup) return;
+
+  try {
+    resetScheduleCourseDropdown('Loading courses...');
+
+    const data = await requestJson('/umbc_db/courses', 'GET');
+    const courses = data.umbc_courses || [];
+
+    scheduleCourseLookup.innerHTML = '<option value="">Select a course</option>';
+
+    courses.forEach((course) => {
+      const option = document.createElement('option');
+      option.value = JSON.stringify(course);
+      option.textContent = `${course.course_subject} ${course.course_code}`;
+      scheduleCourseLookup.appendChild(option);
+    });
+  } catch (err) {
+    resetScheduleCourseDropdown('Failed to load courses');
+    showMessage(err.message, 'error');
+  }
+};
+
+  const loadUmbcAccountsDropdown = async () => {
+    if (!accountLookupResults) return;
+
+    try {
+      resetUmbcLookupDropdown('Loading accounts...');
+
+      const data = await requestJson('/umbc_db/accounts', 'GET');
+      const accounts = data.umbc_accounts || [];
+
+      accountLookupResults.innerHTML = '<option value="">Select an account</option>';
+
+      accounts.forEach((account) => {
+        const option = document.createElement('option');
+        option.value = JSON.stringify(account);
+        option.textContent = `${account.first_name} ${account.last_name} ${account.umbc_id}`;
+        accountLookupResults.appendChild(option);
+      });
+    } catch (err) {
+      resetUmbcLookupDropdown('Failed to load accounts');
+      showMessage(err.message, 'error');
+    }
+  };
+
+  (async () => {
+    if (accountForm && accountLookupResults) {
+      await loadUmbcAccountsDropdown();
+      setAccountFormMode('add');
+    }
+
+    if (scheduleForm && scheduleCourseLookup) {
+      await loadUmbcCoursesDropdown();
+      setScheduleFormMode('add');
+    }
+  })();
+
+
+  document.getElementById('reset-schedule-form')?.addEventListener('click', () => {
+    scheduleForm.reset();
+    document.getElementById('schedule_id').value = '';
+    if (scheduleCourseLookup) {
+      scheduleCourseLookup.value = '';
+    }
+    clearScheduleCourseFields();
+    setScheduleFormMode('add');
+  });
+  document.getElementById('reset-event-form')?.addEventListener('click', () => eventForm.reset());
+  document.getElementById('reset-account-form')?.addEventListener('click', () => {
+    accountForm.reset();
+    document.getElementById('account_user_id').value = '';
+    if (accountLookupResults) {
+      accountLookupResults.value = '';
+    }
+    clearAccountTextFields();
+    setAccountFormMode('add');
+  });
+
+accountLookupResults?.addEventListener('change', () => {
+  if (!accountLookupResults.value) {
+    clearAccountTextFields();
+    setAccountFormMode('add');
+    return;
+  }
+
+  try {
+    const account = JSON.parse(accountLookupResults.value);
+    fillAccountFormFromUmbc(account);
+    setAccountFormMode('add');
+  } catch (err) {
+    showMessage('Failed to load selected UMBC account.', 'error');
+  }
+});
+
+document.querySelectorAll('.admin-edit-schedule').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    const row = e.target.closest('tr');
+    document.getElementById('schedule_id').value = row.dataset.scheduleId;
+    document.getElementById('schedule_user_id').value = row.dataset.userId;
+    document.getElementById('schedule_course_id').value = row.dataset.courseId;
+
+    const dayMap = {
+      MON: 'Monday',
+      TUE: 'Tuesday',
+      WED: 'Wednesday',
+      THU: 'Thursday',
+      FRI: 'Friday'
+    };
+
+    document.getElementById('schedule_day_of_week').value = dayMap[row.dataset.dayOfWeek] || '';
+    document.getElementById('schedule_start_time').value = row.dataset.startTime;
+    document.getElementById('schedule_end_time').value = row.dataset.endTime;
+
+    if (scheduleCourseLookup) {
+      scheduleCourseLookup.value = '';
+    }
+
+    setScheduleFormMode('edit');
+
+    showMessage(`Loaded schedule ${row.dataset.scheduleId} into the form.`, 'success');
+  });
+});
 
   document.querySelectorAll('.admin-delete-schedule').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -552,6 +782,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  scheduleCourseLookup?.addEventListener('change', () => {
+  if (!scheduleCourseLookup.value) {
+    clearScheduleCourseFields();
+    setScheduleFormMode('add');
+    return;
+  }
+
+  try {
+    const course = JSON.parse(scheduleCourseLookup.value);
+    fillScheduleFormFromCourse(course);
+    setScheduleFormMode('add');
+  } catch (err) {
+    showMessage('Failed to load selected course.', 'error');
+  }
+});
+
   eventForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -581,18 +827,29 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.admin-edit-account').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const row = e.target.closest('tr');
+
       document.getElementById('account_user_id').value = row.dataset.userId;
       document.getElementById('user_login').value = row.dataset.userLogin || '';
       document.getElementById('user_email').value = row.dataset.userEmail || '';
       document.getElementById('first_name').value = row.dataset.firstName || '';
       document.getElementById('last_name').value = row.dataset.lastName || '';
 
-      const roles = (row.dataset.roles || '').split(',').map(r => r.trim().toLowerCase());
+      const roles = (row.dataset.roles || '')
+        .split(',')
+        .map(r => r.trim().toLowerCase())
+        .filter(Boolean);
+
       accountForm.querySelectorAll('input[name="roles[]"]').forEach(cb => {
         cb.checked = roles.includes(cb.value.toLowerCase());
       });
 
-      showMessage(`Loaded account ${row.dataset.userId}. For existing users, only role updates are supported by the API.`, 'success');
+      if (accountLookupResults) {
+        accountLookupResults.value = '';
+      }
+
+      setAccountFormMode('edit');
+
+      showMessage(`Loaded account ${row.dataset.userId}.`, 'success');
     });
   });
 
@@ -616,7 +873,13 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
 
     const id = document.getElementById('account_user_id').value.trim();
-    const roles = Array.from(accountForm.querySelectorAll('input[name="roles[]"]:checked')).map(el => el.value);
+    const user_login = document.getElementById('user_login').value.trim();
+    const user_email = document.getElementById('user_email').value.trim();
+    const first_name = document.getElementById('first_name').value.trim();
+    const last_name = document.getElementById('last_name').value.trim();
+    const roles = Array.from(
+      accountForm.querySelectorAll('input[name="roles[]"]:checked')
+    ).map(el => el.value);
 
     if (roles.length === 0) {
       showMessage('Select at least one role.', 'error');
@@ -625,14 +888,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       if (id) {
-        await requestJson(`/accounts/${id}`, 'PATCH', { roles });
-        showMessage(`Updated roles for account ${id}. Reload to refresh the table.`);
+        await requestJson(`/accounts/${id}`, 'PATCH', {
+          user_login,
+          user_email,
+          first_name,
+          last_name,
+          roles
+        });
+        showMessage(`Updated account ${id}. Reload to refresh the table.`);
       } else {
         const payload = {
-          user_login: document.getElementById('user_login').value.trim(),
-          user_email: document.getElementById('user_email').value.trim(),
-          first_name: document.getElementById('first_name').value.trim(),
-          last_name: document.getElementById('last_name').value.trim(),
+          user_login,
+          user_email,
+          first_name,
+          last_name,
           roles
         };
         const data = await requestJson('/accounts', 'POST', payload);
@@ -640,6 +909,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       accountForm.reset();
+      document.getElementById('account_user_id').value = '';
+      if (accountLookupResults) {
+        accountLookupResults.value = '';
+      }
+      setAccountFormMode('add');
     } catch (err) {
       showMessage(err.message, 'error');
     }
