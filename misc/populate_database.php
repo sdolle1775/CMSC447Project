@@ -170,9 +170,10 @@ function populate_courses(&$data, $umbcPdo, $ascPdo, &$courses, &$courseId) {
     ];
     
     $umbcStmt->execute(array_slice($stmtArr, 0, 4, true));
-    $ascStmt->execute($stmtArr);
-    $updateStmt->execute(array_slice($stmtArr, 1, 1, true));
-
+    if ($stmtArr[":course_name"] != "Software Engineering I") {
+        $ascStmt->execute($stmtArr);
+        $updateStmt->execute(array_slice($stmtArr, 1, 1, true));
+    }
     $courses[$data["course_subject"] . $data["course_code"]] = $courseId;
     $courseId++;
     return;

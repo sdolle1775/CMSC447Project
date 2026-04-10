@@ -32,7 +32,7 @@ foreach ($eventTypes as $eventType) {
     <article id="post-tutoring-admin" class="page type-page status-publish hentry">
 
       <header class="entry-header">
-        <h1 class="entry-title">Tutoring Admin</h1>
+        <h1 class="entry-title">Drop-In Tutoring Management</h1>
       </header>
 
       <div class="entry-content">
@@ -41,8 +41,6 @@ foreach ($eventTypes as $eventType) {
             <p>You must be logged in with an authorized staff or admin account to access tutoring controls.</p>
           </section>
         <?php else : ?>
-
-          <div class="tutoring-admin-message" id="tutoring-admin-message" hidden></div>
 
           <nav class="tutoring-admin-tabs" aria-label="Admin sections">
             <?php if ($is_staff || $is_admin) : ?>
@@ -57,7 +55,8 @@ foreach ($eventTypes as $eventType) {
           <?php if ($is_staff || $is_admin) : ?>
           <section class="admin-section active" id="admin-tab-events">
             <h2>Tutor Events</h2>
-            <p>Create, update, or remove late arrivals, call-outs, early departures, and related shift events.</p>
+            <p>Create, update, and delete tutor events such as late arrivals, call-outs, early departures, and other shift events.</p>
+            <h3 id="event-form-mode-label">Create New Event</h3>
 
             <form class="tutoring-admin-form" id="event-form">
               <input type="hidden" id="event_id" name="event_id" />
@@ -105,7 +104,7 @@ foreach ($eventTypes as $eventType) {
                   <label for="duration"><strong>Duration (minutes)</strong></label>
                   <select id="duration" name="duration">
                     <option value="">Select duration</option>
-                    <?php tutoring_minute_options(5); ?>
+                    <?php tutoring_minute_options(5, true); ?>
                   </select>
                 </div>
                 
@@ -114,11 +113,12 @@ foreach ($eventTypes as $eventType) {
               <div class="admin-actions">
                 <button type="submit" class="button button-primary">Save Event</button>
                 <button type="button" class="button button-secondary" id="reset-event-form">Clear</button>
+                <span class="tutoring-admin-message" id="tutoring-admin-message" hidden></span>
               </div>
             </form>
 
             <div class="umbc-table-wrapper">
-              <table class="umbc-table admin-table" id="events-table">
+              <table class="umbc-table admin-table" id="event-table">
                 <thead>
                   <tr>
                     <th>Tutor</th>
@@ -143,8 +143,13 @@ foreach ($eventTypes as $eventType) {
                     >
                       <td><?php echo esc_html($event_user ? tutoring_admin_user_label($event_user) : $event['user_id']); ?></td>
                       <td><?php echo esc_html(display_snake_case($event_type['event_name'] ?? $event['event_type'])); ?></td>
-                      <td><?php echo esc_html($event['start_day']); ?></td>
-                      <td><?php echo esc_html($event['final_day'] ?: '—'); ?></td>
+                      <td>
+                        <?php echo esc_html(date('m-d-Y', strtotime($event['start_day']))); ?>
+                      </td>
+
+                      <td>
+                        <?php echo esc_html($event['final_day'] ? date('m-d-Y', strtotime($event['final_day'])) : '—'); ?>
+                      </td>
                       <td><?php echo esc_html($event['duration'] !== null ? $event['duration'] : '—'); ?></td>
                       <td>
                         <button type="button" class="button button-secondary admin-edit-event">Edit</button>
@@ -161,7 +166,9 @@ foreach ($eventTypes as $eventType) {
           <?php if ($is_admin) : ?>
           <section class="admin-section" id="admin-tab-schedule">
             <h2>Schedule Management</h2>
-            <p>Add, update, and remove tutoring time slots. New courses can also be added through the same form.</p>
+            <p>Create, update, and delete drop in tutor schedule entries.</p>
+            <h3 id="schedule-form-mode-label">Creating New Schedule Entry</h3>
+            
 
             <form class="tutoring-admin-form" id="schedule-form">
               <input type="hidden" id="schedule_id" name="schedule_id" />
@@ -220,16 +227,16 @@ foreach ($eventTypes as $eventType) {
                       <label for="schedule_start_time_minute" class="time-select-label">Minute</label>
                       <select id="schedule_start_time_minute" aria-label="Start time minute" required>
                         <option value="">-</option>
-                        <?php tutoring_minute_options(); ?>
+                        <?php tutoring_minute_options(pad: true); ?>
                       </select>
                     </div>
 
                     <div class="time-select-col">
-                      <label for="schedule_start_time_ampm" class="time-select-label">AM/PM</label>
+                      <label for="schedule_start_time_ampm" class="time-select-label">a.m./p.m.</label>
                       <select id="schedule_start_time_ampm" aria-label="Start time AM or PM" required>
                         <option value="">-</option>
-                        <option value="am">AM</option>
-                        <option value="pm">PM</option>
+                        <option value="a.m.">a.m.</option>
+                        <option value="p.m.">p.m.</option>
                       </select>
                     </div>
                   </div>
@@ -252,16 +259,16 @@ foreach ($eventTypes as $eventType) {
                       <label for="schedule_end_time_minute" class="time-select-label">Minute</label>
                       <select id="schedule_end_time_minute" aria-label="End time minute" required>
                         <option value="">-</option>
-                        <?php tutoring_minute_options(); ?>
+                        <?php tutoring_minute_options(pad: true); ?>
                       </select>
                     </div>
 
                     <div class="time-select-col">
-                      <label for="schedule_end_time_ampm" class="time-select-label">AM/PM</label>
+                      <label for="schedule_end_time_ampm" class="time-select-label">a.m./p.m.</label>
                       <select id="schedule_end_time_ampm" aria-label="End time AM or PM" required>
                         <option value="">-</option>
-                        <option value="am">AM</option>
-                        <option value="pm">PM</option>
+                        <option value="a.m.">a.m.</option>
+                        <option value="p.m.">p.m.</option>
                       </select>
                     </div>
                   </div>
@@ -274,7 +281,7 @@ foreach ($eventTypes as $eventType) {
               </div>
 
               <details class="admin-details">
-                <summary><strong>New course / subject fields</strong> (only needed when the course ID does not already exist)</summary>
+                <summary><strong>New course</strong> (Search for courses not currently scheduled)</summary>
                 <div class="admin-grid">
                   <div class="account-search-wrapper">
                     <label for="course_search_query"><strong>Search Course</strong></label>
@@ -294,6 +301,7 @@ foreach ($eventTypes as $eventType) {
               <div class="admin-actions">
                 <button type="submit" class="button button-primary">Save Schedule Entry</button>
                 <button type="button" class="button button-secondary" id="reset-schedule-form">Clear</button>
+                <span class="tutoring-admin-message" id="tutoring-admin-message" hidden></span>
               </div>
             </form>
 
@@ -326,7 +334,7 @@ foreach ($eventTypes as $eventType) {
                         <?php
                         echo esc_html(
                           $schedule_course
-                            ? ($schedule_course['course_subject'] . ' ' . $schedule_course['course_code'] . ' - ' . $schedule_course['course_name'])
+                            ? trim($schedule_course['course_subject'] . ' ' . $schedule_course['course_code'] . ' - ' . $schedule_course['course_name'])
                             : $row['course_id']
                         );
                         ?>
@@ -347,6 +355,7 @@ foreach ($eventTypes as $eventType) {
 
           <section class="admin-section" id="admin-tab-accounts">
             <h2>Account Management</h2>
+            <h3 id="account-form-mode-label">Adding New Account</h3>
             <p>Create local tutoring accounts and update or remove assigned roles.</p>
 
             <form class="tutoring-admin-form" id="account-form">
@@ -401,11 +410,12 @@ foreach ($eventTypes as $eventType) {
               <div class="admin-actions">
                 <button type="submit" class="button button-primary">Save Account</button>
                 <button type="button" class="button button-secondary" id="reset-account-form">Clear</button>
+                <span class="tutoring-admin-message" id="tutoring-admin-message" hidden></span>
               </div>
             </form>
 
             <div class="umbc-table-wrapper">
-              <table class="umbc-table admin-table" id="accounts-table">
+              <table class="umbc-table admin-table" id="account-table">
                 <thead>
                   <tr>
                     <th>UMBC ID</th>
@@ -519,16 +529,19 @@ foreach ($eventTypes as $eventType) {
   text-align: center;
 }
 
+#event-table td:nth-child(3),
+#event-table td:nth-child(4),
 #schedule-table td:nth-child(4),
 #schedule-table td:nth-child(5) {
   white-space: nowrap;
 }
 
 .tutoring-admin-message {
-  margin-bottom: 1rem;
-  padding: 12px 16px;
+  padding: 6px 12px;
   border-radius: 6px;
   font-weight: 600;
+  align-self: center;
+  white-space: nowrap;
 }
 
 .tutoring-admin-message.success {
