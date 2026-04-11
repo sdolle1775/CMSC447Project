@@ -167,12 +167,11 @@ get_header();
                               <td><?php echo esc_html($entry['first_name']); ?></td>
                               <?php
                                 $status = tutoring_get_tutor_status(
-                                    $entry['user_id'],
                                     $entry['day_of_week'],
                                     $entry['start_time'],
                                     $entry['end_time'],
                                     $eventTypes,
-                                    $uEvents
+                                    $uEvents[$entry['user_id']] ?? []
                                 );
                               ?>
                               <td class="tutoring-status-cell">
@@ -189,9 +188,9 @@ get_header();
                                       <?php echo esc_html($status['leaving_early_note']); ?>
                                     </div>
                                   <?php endif; ?>
-                                  <?php if (!empty($status['absent_note'])): ?>
-                                    <div class="tutoring-status-sub tutoring-absent-note">
-                                      <?php echo esc_html($status['absent_note']); ?>
+                                  <?php if (!empty($status['call_out_note'])): ?>
+                                    <div class="tutoring-status-sub tutoring-call-out-note">
+                                      <?php echo esc_html($status['call_out_note']); ?>
                                     </div>
                                   <?php endif; ?>
                                 </div>
@@ -257,10 +256,10 @@ get_header();
 
 .tutoring-leaving-early-note {
   font-weight: bold;
-  color: #ffbb1b;
+  color: #a67a05;
 }
 
-.tutoring-absent-note {
+.tutoring-call-out-note {
   color: #555;
 }
 

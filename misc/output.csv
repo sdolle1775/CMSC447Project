@@ -43,6 +43,7 @@ CMSC,411,Computer Architecture
 CMSC,421,Principles of Operating Systems
 CMSC,426,Principles of Computer Security
 CMSC,441,Design and Analysis of Algorithms
+CMSC,447,Software Engineering I
 CMSC,471,Introduction to Artificial Intelligence
 ECON,101,Principles of Microeconomics
 ECON,102,Principles of Macroeconomics
@@ -694,7 +695,7 @@ Akanksha,STAT,355,Wednesday,1:00 p.m.,2:00 p.m.
 Dani,STAT,355,Wednesday,2:00 p.m.,4:00 p.m.
 event_types
 event_name
-absent
+called_out
 late
 leaving_early
 at_capacity
@@ -703,8 +704,8 @@ first_name,event_name,start_day,final_day,duration
 Angela,late,0,NULL,NULL
 Shakib,leaving_early,0,NULL,30
 Zoya,at_capacity,0,NULL,NULL
-Tristan,absent,0,0,NULL
-Lillian,absent,0,1,NULL
-Angela,absent,1,1,NULL
+Tristan,called_out,0,0,NULL
+Lillian,called_out,0,1,NULL
+Angela,called_out,1,1,NULL
 Shakib,late,0,NULL,NULL
-Shakib,absent,1,1,NULL
+Shakib,called_out,1,1,NULL

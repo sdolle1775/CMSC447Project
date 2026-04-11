@@ -1,4 +1,10 @@
 <?php
+const CHECK_ICON_SVG     = '<svg aria-hidden="true" focusable="false" style="width:1em;height:1em;vertical-align:middle" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13.5 4.5L6.5 11.5L2.5 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const X_ICON_SVG         = '<svg aria-hidden="true" focusable="false" style="width:1em;height:1em;vertical-align:middle" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+const C_WARNING_ICON_SVG = '<svg aria-hidden="true" focusable="false" style="width:1em;height:1em;vertical-align:middle" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2"/><path d="M11.5 4.5L4.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+const T_WARNING_ICON_SVG = '<svg aria-hidden="true" focusable="false" style="width:1em;height:1em;vertical-align:middle" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 2L14.5 13.5H1.5L8 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><line x1="8" y1="6" x2="8" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="8" cy="12" r="0.75" fill="currentColor"/></svg>';
+const PAUSE_ICON_SVG     = '<svg aria-hidden="true" focusable="false" style="width:1em;height:1em;vertical-align:middle" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="2.5" width="3.5" height="11" rx="1" fill="currentColor"/><rect x="9.5" y="2.5" width="3.5" height="11" rx="1" fill="currentColor"/></svg>';
+
 const U_SCHEDULE_CACHE_KEY   = "user_schedule";
 const U_EVENTS_CACHE_KEY     = "user_events";
 const USER_CACHE_GROUP       = "user_group";
@@ -20,6 +26,13 @@ const DAYS_OF_WEEK = [
     "WED" => "Wednesday",
     "THU" => "Thursday",
     "FRI" => "Friday",
+];
+
+const EVENT_TYPES = [
+    "called_out"    => "1", 
+    "late"          => "2",
+    "leaving_early" => "3", 
+    "at_capacity"   => "4"
 ];
 
 if (!function_exists("wp_delete_user")) {
@@ -51,11 +64,11 @@ if (!function_exists("wp_delete_user")) {
         }
     });
 
-    add_action( "after_setup_theme", function() {
+    add_action("after_setup_theme", function() {
         if (current_user_can(TUTOR_ROLE) ||
             current_user_can(ADMIN_ROLE) ||
             current_user_can(STAFF_ROLE)) {
-            show_admin_bar( false );
+            show_admin_bar(false);
         }
     });
 
@@ -126,19 +139,20 @@ if (!function_exists("wp_delete_user")) {
         return display_snake_case(str_replace("asc", "ASC", implode(", ", $roles)) ?? "—");
     }
 
-    function tutoring_time_options($base, $max, $step) {
+    function tutoring_time_options($base, $max, $step, $offset, $pad) {
+        $base += $offset ? $step : 0;
         for ($m = $base; $m < $max; $m += $step) {
-            $val = sprintf('%02d', $m);
-            echo '<option value="' . esc_attr($val) . '">' . esc_html($val) . '</option>';
+            $val = $pad ? sprintf('%02d', $m) : $m;
+            echo '<option value="' . esc_attr(sprintf('%02d', $m)) . '">' . esc_html($val) . '</option>';
         }
     }
 
     function tutoring_hour_options() {
-        tutoring_time_options(1, 13, 1);
+        tutoring_time_options(0, 13, 1, true, false);
     }
 
-    function tutoring_minute_options($step = 15) {
-        tutoring_time_options(0, 60, $step);
+    function tutoring_minute_options($step = 15, $offset = false, $pad = false) {
+        tutoring_time_options(0, 60, $step, $offset, $pad);
     }
 
     function flush_cache() {
@@ -153,146 +167,141 @@ if (!function_exists("wp_delete_user")) {
         return;
     }
 
-    function tutoring_get_tutor_status($user_id, $day_of_week, $start_time, $end_time, $event_types, $u_events) {
+    function tutoring_get_tutor_status($day_of_week, $start_time, $end_time, $event_types, $u_events) {
         $now       = new DateTime('now', new DateTimeZone('America/New_York'));
-        $curr_day  = $now->format('Y-m-d');
+        $curr_date = $now->format('Y-m-d'); 
         $curr_time = $now->format('H:i:s');
- 
-        $type_name_map = [];
-        foreach ($event_types as $et) {
-            $type_name_map[$et['event_type_id']] = $et['event_name'];
-        }
- 
-        $absent_event        = null;
-        $late_event          = null;
-        $leaving_early_event = null;
-        $at_capacity_event   = null;
- 
+        $curr_day  = strtoupper($now->format('D'));
+
+        $co_event = null; $late_event = null;
+        $le_event = null; $ac_event   = null;
+
         foreach ($u_events as $ev) {
-            if ((int) $ev['user_id'] !== (int) $user_id) {
-                continue;
-            }
- 
-            $type_name = $type_name_map[$ev['event_type_id']] ?? '';
+            $type_name = $event_types[$ev['event_type_id']] ?? '';
             $start_day = $ev['start_day'];
             $final_day = $ev['final_day'] ?? $ev['start_day'];
- 
+            
             switch ($type_name) {
-                case 'absent':
-                    if ($curr_day >= $start_day && $curr_day <= $final_day) {
-                        $absent_event = $ev;
-                    } elseif ($absent_event === null && $start_day > $curr_day) {
-                        $soon_cutoff = (new DateTime($curr_day))->modify('+7 days')->format('Y-m-d');
-                        if ($start_day <= $soon_cutoff) {
-                            $absent_event = $ev;
+                case 'called_out':
+                    if ($curr_date >= $start_day && $curr_date <= $final_day) {
+                        $co_event = $ev;
+                    } elseif ($co_event === null && $start_day > $curr_date) {
+                        $seven_days_out = (new DateTime($curr_date))->modify('+7 days')->format('Y-m-d');
+                        if ($start_day <= $seven_days_out) {
+                            $co_event = $ev;
                         }
                     }
                     break;
- 
+
                 case 'late':
-                    if ($start_day === $curr_day) {
+                    if ($start_day === $curr_date) {
                         $late_event = $ev;
                     }
                     break;
- 
+
                 case 'leaving_early':
-                    if ($start_day === $curr_day) {
-                        $leaving_early_event = $ev;
+                    if ($start_day === $curr_date) {
+                        $le_event = $ev;
                     }
                     break;
- 
+
                 case 'at_capacity':
-                    if ($start_day === $curr_day) {
-                        $at_capacity_event = $ev;
+                    if ($start_day === $curr_date) {
+                        $ac_event = $ev;
                     }
                     break;
             }
         }
- 
-        $icon_check    = '<svg aria-hidden="true" focusable="false" style="width:1em;height:1em;vertical-align:middle" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13.5 4.5L6.5 11.5L2.5 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-        $icon_x        = '<svg aria-hidden="true" focusable="false" style="width:1em;height:1em;vertical-align:middle" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-        $icon_slash    = '<svg aria-hidden="true" focusable="false" style="width:1em;height:1em;vertical-align:middle" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2"/><path d="M11.5 4.5L4.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-        $icon_triangle = '<svg aria-hidden="true" focusable="false" style="width:1em;height:1em;vertical-align:middle" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 2L14.5 13.5H1.5L8 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><line x1="8" y1="6" x2="8" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="8" cy="12" r="0.75" fill="currentColor"/></svg>';
-        $icon_pause    = '<svg aria-hidden="true" focusable="false" style="width:1em;height:1em;vertical-align:middle" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="2.5" width="3.5" height="11" rx="1" fill="currentColor"/><rect x="9.5" y="2.5" width="3.5" height="11" rx="1" fill="currentColor"/></svg>';
- 
-        $absent_note = '';
-        if ($absent_event !== null) {
-            $abs_start = $absent_event['start_day'];
-            $abs_final = $absent_event['final_day'] ?? $absent_event['start_day'];
- 
+
+        $co_note = '';
+        if ($co_event !== null) {
+            $abs_start = $co_event['start_day'];
+            $abs_final = $co_event['final_day'] ?? $co_event['start_day'];
+
             $fmt_start = (new DateTime($abs_start))->format('M j');
             $fmt_end   = (new DateTime($abs_final))->format('M j');
             $range     = ($abs_start === $abs_final) ? $fmt_start : "$fmt_start to $fmt_end";
- 
-            $seven_days_out = (new DateTime($curr_day))->modify('+7 days')->format('Y-m-d');
- 
-            if ($abs_start <= $seven_days_out ||
-                $curr_day >= $abs_start && $curr_day <= $abs_final) {
-                $absent_note = "Called out on: $range";
+
+            $co_note = "Called out on: $range";
+        }
+
+        $co_in_effect = false;
+        if ($co_event !== null) {
+            $abs_start  = $co_event['start_day'];
+            $abs_final  = $co_event['final_day'] ?? $co_event['start_day'];
+            $six_days_out = (new DateTime($curr_date))->modify('+6 days')->format('Y-m-d');
+
+            $check    = new DateTime(max($abs_start, $curr_date));
+            $loop_end = new DateTime(min($abs_final, $six_days_out));
+
+            while ($check <= $loop_end) {
+                if (strtoupper($check->format('D')) === $day_of_week) {
+                    $co_in_effect = true;
+                    break;
+                }
+                $check->modify('+1 day');
             }
         }
- 
-        $leaving_early_note = '';
-        $has_left_early     = false;
- 
-        if ($leaving_early_event !== null) {
-            $duration = isset($leaving_early_event['duration']) ? (int) $leaving_early_event['duration'] : null;
- 
+
+        $le_note  = '';
+        $has_left = false;
+        $is_today = ($curr_day === $day_of_week);
+
+        if ($le_event !== null && $is_today) {
+            $duration = isset($le_event['duration']) ? (int) $le_event['duration'] : null;
+
             if ($duration !== null && $duration > 0) {
-                $departure_time = (new DateTime($curr_day . ' ' . $end_time))
+                $departure_time = (new DateTime($curr_date . ' ' . $end_time))
                     ->modify("-{$duration} minutes")
                     ->format('H:i:s');
- 
+
                 if ($curr_time >= $departure_time) {
-                    $has_left_early = true;
+                    $has_left = true;
                 } else {
-                    $leaving_early_note = "Leaving {$duration} minutes early";
+                    $le_note = "Leaving {$duration} minutes early";
                 }
             } else {
-                $leaving_early_note = "Leaving early";
+                $le_note = "Leaving early";
             }
         }
- 
-        $curr_day_abbr    = strtoupper($now->format('D'));
-        $is_today         = ($curr_day_abbr === $day_of_week);
-        $is_active_window = ($curr_time >= $start_time && $curr_time <= $end_time);
- 
-        $make = function($label, $color, $icon, $le_note) use ($absent_note, $icon_triangle) {
+        
+        
+        // Closure
+        $make = function($label, $color, $icon, $le_note, $co_note) {
             return [
                 'label'              => $label,
                 'color'              => $color,
                 'icon'               => $icon,
                 'leaving_early_note' => $le_note,
-                'leaving_early_icon' => $le_note !== '' ? $icon_triangle : '',
-                'absent_note'        => $absent_note,
+                'leaving_early_icon' => $le_note !== '' ? T_WARNING_ICON_SVG : '',
+                'call_out_note'      => $co_note,
             ];
         };
- 
-        if ($absent_event !== null
-            && $curr_day >= $absent_event['start_day']
-            && $curr_day <= ($absent_event['final_day'] ?? $absent_event['start_day'])
-        ) {
-            return $make('Called Out', '#da2128', $icon_x, '');
-        }
- 
-        if (!$is_today || !$is_active_window) {
-            return $make('Unavailable', '#212121', '', '');
+
+        $is_active_window = ($curr_time >= $start_time && $curr_time <= $end_time);
+
+        if ($co_in_effect) {
+            return $make('Called Out', '#da2128', X_ICON_SVG, $le_note, $co_note);
         }
 
-        if ($has_left_early) {
-            return $make('Left Early', '#d83933', $icon_x, '');
+        if (!$is_today || !$is_active_window) {
+            return $make('Unavailable', '#212121', '', $le_note, $co_note);
+        }
+
+        if ($has_left) {
+            return $make('Left Early', '#da2128', X_ICON_SVG, $le_note, $co_note);
         }
 
         if ($late_event !== null) {
-            return $make('Running Late', '#e65100', $icon_slash, $leaving_early_note);
+            return $make('Running Late', '#e65100', C_WARNING_ICON_SVG, $le_note, $co_note);
         }
 
-        if ($at_capacity_event !== null) {
-            return $make('At Capacity for Students', '#ffbb1b', $icon_pause, $leaving_early_note);
+        if ($ac_event !== null) {
+            return $make('At Capacity for Students', '#a67a05', PAUSE_ICON_SVG, $le_note, $co_note);
         }
 
         if ($is_active_window) {
-            return $make('Available', '#2e7d32', $icon_check, $leaving_early_note);
+            return $make('Available', '#2e7d32', CHECK_ICON_SVG, $le_note, $co_note);
         }
     }
 }
@@ -419,21 +428,17 @@ if (!function_exists("wp_delete_user")) {
         $event_types = []; $u_events = [];
         foreach ($events_obj as $row) {
             if (!isset($event_types[$row->event_type_id])) {
-                $event_types[$row->event_type_id] = [
-                    "event_type_id" => $row->event_type_id,
-                    "event_name"    => $row->event_name
-                ];
+                $event_types[$row->event_type_id] = $row->event_name;
             }
 
-            $u_events[] = [
-                "user_id"        => $row->user_id,
+            $u_events[$row->user_id][] = [
                 "event_type_id"  => $row->event_type_id,
                 "start_day"      => $row->start_day,  
                 "final_day"      => $row->final_day,
                 "duration"       => $row->duration
             ];
         }
-        return [array_values($event_types), $u_events];
+        return [$event_types, $u_events];
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1015,26 +1020,8 @@ if (!function_exists("wp_delete_user")) {
         if ($timeStr === null || $timeStr === "") {
             return false;
         }
-
-        $timeStr = trim($timeStr);
-
-        if (strtolower($timeStr) === "noon") {
-            return "12:00:00";
-        }
-
-        $time = DateTime::createFromFormat("H:i:s", $timeStr);
-        if ($time !== false) {
-            return $time->format("H:i:s");
-        }
-
-        $normalized = str_replace(".", "", strtolower($timeStr));
-        $time = DateTime::createFromFormat("g:i a", $normalized);
-
-        if ($time === false) {
-            return false;
-        }
-
-        return $time->format("H:i:s");
+        $time = DateTime::createFromFormat("H:i:s", trim($timeStr));
+        return $time ? $time->format("H:i:s") : false;
     }
 
 
@@ -1474,6 +1461,14 @@ if (!function_exists("wp_delete_user")) {
         $final_day  = $request->get_param("final_day");
         $duration   = $request->get_param("duration");
 
+        if ($event_type != EVENT_TYPES["leaving_early"]) {
+            $duration = null;
+        }
+
+        if ($event_type != EVENT_TYPES["called_out"]) {
+            $final_day = null;
+        }
+
         if ($start_day === false || $start_day === null) {
             return new WP_Error("invalid_start_day", "Invalid start day", ["status" => 400]);
         }
@@ -1543,6 +1538,14 @@ if (!function_exists("wp_delete_user")) {
         $start_day   = $request->get_param("start_day");
         $final_day   = $request->get_param("final_day");
         $duration    = $request->get_param("duration");
+
+        if ($event_type != EVENT_TYPES["leaving_early"]) {
+            $duration = null;
+        }
+
+        if ($event_type != EVENT_TYPES["called_out"]) {
+            $final_day = null;
+        }
 
         if ($start_day === false || $start_day === null) {
             return new WP_Error("invalid_start_day", "Invalid start day", ["status" => 400]);
