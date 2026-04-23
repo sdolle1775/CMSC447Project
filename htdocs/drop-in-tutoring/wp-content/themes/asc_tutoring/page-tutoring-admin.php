@@ -461,9 +461,9 @@ foreach ($eventTypes as $eventType) {
               </p>
 
               <div class="admin-actions">
-              <button type="button" class="button button-primary" id="logs-fetch-btn">Fetch Logs</button>
-              <span class="tutoring-admin-message" id="logs-message" hidden></span>
-            </div>
+                <button type="button" class="button button-primary" id="logs-fetch-btn">Fetch Logs</button>
+                <span class="tutoring-admin-message" id="logs-message" hidden></span>
+              </div>
 
               <div class="logs-viewer" id="logs-viewer" hidden>
                 <div class="logs-nav">
