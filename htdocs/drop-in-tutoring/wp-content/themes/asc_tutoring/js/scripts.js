@@ -1035,6 +1035,7 @@ function initAdminUI() {
       s2reset('schedule_day_of_week');
       setTimeDropdowns('schedule_start_time', '');
       setTimeDropdowns('schedule_end_time', '');
+      $('schedule_id').value = '';
       setScheduleFormMode('add');
 
       if (promotedCourse?.course_id && scheduleCourseLookup) {
@@ -1085,6 +1086,7 @@ function initAdminUI() {
       s2reset('duration');
       $('event_type').selectedIndex = 0;
       toggleEventFields();
+      $('event_id').value = '';
       setEventFormMode('add');
     } catch (err) {
       showMessage(err.message, 'error');
@@ -1516,57 +1518,10 @@ function initLogsUI() {
 
   if (!fetchBtn) return;
 
-  // --- Dummy data ---
-  const DUMMY_LOGS = (() => {
-    const logs = {};
-    const sep = "\n" + " ".repeat(22);
-    const entries = [
-      [0,  '09:14:02', 'admin (LO89179, Samuel Sudhakar) EDITED schedule entry:' + sep + 
-        'Joseph Williams, STAT 121, Wednesday, 12:45 p.m., 2:30 p.m.' + sep + 
-        'Changed: Tuesday-> Wednesday'],
-      [0,  '14:22:10', 'staff (DA46048, Abe Green) CREATED event:' + sep +
-        'Kaila Garcia, At Capacity, 2026-04-19'],
-      [0,  '11:03:55', 'admin (WB55131, Justin Collier) DELETED event:' + sep +
-        'Kaila Garcia, At Capacity, 2026-04-19'],
-      [1,  '08:45:00', 'admin (WB55131, Justin Collier) CREATED account:' + sep +
-        'NK46421, Chiara Hall, chall@umbc.edu, Tutor'],
-      [1,  '13:10:33', 'staff (DA46048, Abe Green) CREATED event:' + sep +
-        'Dani Martinez, Late, 2026-04-18'],
-      [3,  '10:00:01', 'admin (OI33374, Sam Dolle) DELETED schedule entry:' + sep + 
-        'Aren Garcia, PHYS 121, Friday, 2:00 p.m., 5:00 p.m.'],
-      [4,  '09:30:15', 'admin (OI33374, Sam Dolle) EDITED account:' + sep +
-        'DA46048, Abe Green, agreen@umbc.edu, Tutor;ASC Staff' + sep +
-        'Changed: Tutor -> Tutor;ASC Staff'],
-      [4,  '15:55:42', 'admin (LO89179, Samuel Sudhakar) CREATED event #52'],
-      [4,  '16:01:09', 'admin (LO89179, Samuel Sudhakar) EDITED event #52'],
-      [6,  '11:22:48', 'admin (WB55131, Justin Collier) CREATED schedule entry #43'],
-      [8,  '10:14:00', 'staff (DA46048, Abe Green) DELETED event #10'],
-      [9,  '09:05:31', 'admin (OI33374, Sam Dolle) EDITED account for cjohnson'],
-      [12, '14:00:00', 'admin (OI33374, Sam Dolle) CREATED event #48'],
-      [13, '08:30:22', 'staff (DA46048, Abe Green) EDITED schedule entry #3'],
-      [15, '11:45:09', 'admin (WB55131, Justin Collier) DELETED account for dgreen'],
-      [18, '13:22:55', 'staff (DA46048, Abe Green) CREATED schedule entry #44'],
-      [20, '09:10:00', 'admin (OI33374, Sam Dolle) EDITED event #44'],
-      [21, '16:30:00', 'staff (DA46048, Abe Green) CREATED account for ewhite'],
-      [25, '10:55:12', 'admin (LO89179, Samuel Sudhakar) DELETED event #9'],
-      [27, '12:00:00', 'staff (DA46048, Abe Green) EDITED account for fblack'],
-      [30, '08:00:00', 'admin (OI33374, Sam Dolle) CREATED schedule entry #45'],
-    ];
-    entries.forEach(([daysAgo, time, msg]) => {
-      const d = new Date();
-      d.setDate(d.getDate() - daysAgo);
-      const key = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-      if (!logs[key]) logs[key] = [];
-      logs[key].push(`[${key} ${time}] ${msg}`);
-    });
-    return logs;
-  })();
-  // --- End dummy data ---
-
-  const allDates   = Object.keys(DUMMY_LOGS).sort();
-  const oldestDate = allDates[0] || toDateKey(new Date());
-
-  let windowStart = null; // set on fetch
+  let logsByDate  = {};
+  let allDates    = [];
+  let oldestDate  = null;
+  let windowStart = null;
 
   // --- Date key helpers ---
 
@@ -1604,7 +1559,6 @@ function initLogsUI() {
   function renderWindow(startKey) {
     const todayKey = toDateKey(new Date());
     if (startKey > todayKey) startKey = todayKey;
-
     if (startKey < oldestDate) startKey = oldestDate;
 
     windowStart = startKey;
@@ -1613,58 +1567,80 @@ function initLogsUI() {
     const windowEntries = [];
     for (let i = 0; i < 7; i++) {
       const dayKey = addDays(startKey, -i);
-      (DUMMY_LOGS[dayKey] || []).forEach(line => windowEntries.push(line));
+      (logsByDate[dayKey] || []).forEach(entry => windowEntries.push(entry.lines.join('\n')));
     }
 
     dateLabel.textContent = `${formatLabel(endKey)} - ${formatLabel(startKey)}`;
-
     Array.from(box.childNodes).forEach(n => { if (n !== emptyMsg) n.remove(); });
 
     if (!windowEntries.length) {
       emptyMsg.hidden = false;
     } else {
       emptyMsg.hidden = true;
-      windowEntries.forEach(line => {
+      windowEntries.forEach(text => {
         const span = document.createElement('span');
         span.className   = 'logs-entry';
-        span.textContent = line;
+        span.textContent = text;
         box.appendChild(span);
       });
     }
 
     prevBtn.disabled = endKey <= oldestDate;
-
     nextBtn.disabled = startKey >= todayKey;
   }
 
-  on(fetchBtn, 'click', () => {
-  viewer.hidden = false;
-  renderWindow(toDateKey(new Date()));
-  showMessage('Logs loaded.');
+  function buildExport() {
+    return allDates
+      .flatMap(date => (logsByDate[date] || []).map(e => e.lines.join('\n')))
+      .join('\n');
+  }
 
-  fetchBtn.id        = 'logs-export-btn';
-  fetchBtn.textContent = 'Export Logs';
-  fetchBtn.classList.replace('button-primary', 'button-secondary');
+  // --- Fetch ---
 
-  fetchBtn.addEventListener('click', () => {
-    const allEntries = allDates.flatMap(date => DUMMY_LOGS[date] || []);
-    const blob = new Blob([allEntries.join('\n')], { type: 'text/plain' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `audit-logs-full-${toDateKey(new Date())}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, { once: false });
-});
+  on(fetchBtn, 'click', async () => {
+    fetchBtn.disabled = true;
+    showMessage('Fetching logs…');
 
-  on(prevBtn, 'click', () => {
-    renderWindow(addDays(windowStart, -7));
+    try {
+      const data = await api.request(`/logs`);
+
+      logsByDate = {};
+      for (const entry of data.logs) {
+        if (!logsByDate[entry.date]) logsByDate[entry.date] = [];
+        logsByDate[entry.date].push(entry);
+      }
+
+      allDates    = Object.keys(logsByDate).sort();
+      oldestDate  = allDates[0] || toDateKey(new Date());
+
+      viewer.hidden = false;
+      renderWindow(toDateKey(new Date()));
+      showMessage('Logs loaded.');
+
+      fetchBtn.id          = 'logs-export-btn';
+      fetchBtn.textContent = 'Export Logs';
+      fetchBtn.disabled    = false;
+      fetchBtn.classList.replace('button-primary', 'button-secondary');
+
+      fetchBtn.addEventListener('click', () => {
+        const blob = new Blob([buildExport()], { type: 'text/plain' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `audit-logs-full-${toDateKey(new Date())}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, { once: false });
+
+    } catch (err) {
+      console.log(err);
+      showMessage('Network error fetching logs.', 'error');
+      fetchBtn.disabled = false;
+    }
   });
 
-  on(nextBtn, 'click', () => {
-    renderWindow(addDays(windowStart, 7));
-  });
+  on(prevBtn, 'click', () => { renderWindow(addDays(windowStart, -7)); });
+  on(nextBtn, 'click', () => { renderWindow(addDays(windowStart,  7)); });
 
   on(jumpBtn, 'click', () => {
     const val = jumpInput?.value;
@@ -1672,7 +1648,6 @@ function initLogsUI() {
     renderWindow(val);
     showMessage(`Jumped to week of ${formatLabel(val)}.`);
   });
-
 }
 
 // =============================================================================
