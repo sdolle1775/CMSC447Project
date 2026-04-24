@@ -231,17 +231,13 @@ add_filter("login_redirect", function($redirect_to, $request, $user) {
         $is_today = ($curr_day === $day_of_week);
 
         if ($le_event !== null && $is_today) {
-            $duration = isset($le_event["duration"]) ? (int) $le_event["duration"] : null;
+            $leaving_time = $le_event["leaving_time"] ?? null;
 
-            if ($duration !== null && $duration > 0) {
-                $departure_time = (new DateTime($curr_date . " " . $end_time))
-                    ->modify("-{$duration} minutes")
-                    ->format("H:i:s");
-
-                if ($curr_time >= $departure_time) {
+            if ($leaving_time !== null) {
+                if ($curr_time >= $leaving_time) {
                     $has_left = true;
                 } else {
-                    $le_note = "Leaving {$duration} minutes early";
+                    $le_note = "Leaving early at " . tutoring_admin_time_label($leaving_time);
                 }
             } else {
                 $le_note = "Leaving early";
@@ -335,7 +331,7 @@ add_filter("login_redirect", function($redirect_to, $request, $user) {
                 e.event_type,
                 e.start_day,
                 e.final_day,
-                e.duration,
+                e.leaving_time,
                 et.event_type_id,
                 et.event_name
             FROM events e
@@ -397,7 +393,7 @@ add_filter("login_redirect", function($redirect_to, $request, $user) {
                 "event_type_id" => $row->event_type_id,
                 "start_day"     => $row->start_day,
                 "final_day"     => $row->final_day,
-                "duration"      => $row->duration,
+                "leaving_time"      => $row->leaving_time,
             ];
         }
 
@@ -536,7 +532,7 @@ add_filter("login_redirect", function($redirect_to, $request, $user) {
                 event_type,
                 start_day,
                 final_day,
-                duration
+                leaving_time
             FROM events
             ORDER BY user_id DESC
         ");
@@ -634,7 +630,7 @@ add_filter("login_redirect", function($redirect_to, $request, $user) {
                 "event_type" => $row->event_type,
                 "start_day"  => $row->start_day,
                 "final_day"  => $row->final_day,
-                "duration"   => $row->duration,
+                "leaving_time"   => $row->leaving_time,
             ];
         }
 

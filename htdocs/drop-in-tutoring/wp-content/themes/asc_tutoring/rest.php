@@ -151,15 +151,15 @@
         return DateTime::createFromFormat("Y-m-d", (string) $param)->format("Y-m-d");
     }
 
-    function normalize_event_params($event_type, &$final_day, &$duration) {
+    function normalize_event_params($event_type, &$final_day, &$leaving_time) {
         if ($event_type != EVENT_TYPES["leaving_early"]) {
             $duration = null;
         }
         if ($event_type != EVENT_TYPES["called_out"]) {
             $final_day = null;
         }
-        if ($duration === "" || $duration === "null") {
-            $duration = null;
+        if ($leaving_time === "" || $leaving_time === "null") {
+            $leaving_time = null;
         }
     }
 
@@ -455,10 +455,10 @@
                 "default"           => null,
                 "validate_callback" => function($param, $request, $key) {
                     if ($param === null || $param === "") return true;
-                    return validate_positive_int($param, $request, $key);
+                    return validate_time_field($param, $request, $key);
                 },
                 "sanitize_callback" => function($param) {
-                    return ($param === null || $param === "") ? null : absint($param);
+                    return ($param === null || $param === "") ? null :sanitize_time_field($param);
                 },
             ],
         ];
@@ -746,29 +746,28 @@
     function create_event(WP_REST_Request $request) {
         global $wpdb;
 
-        $event_type = $request->get_param("event_type");
-        $user_id    = $request->get_param("user_id");
-        $start_day  = $request->get_param("start_day");
-        $final_day  = $request->get_param("final_day");
-        $duration   = $request->get_param("duration");
+        $event_type    = $request->get_param("event_type");
+        $user_id       = $request->get_param("user_id");
+        $start_day     = $request->get_param("start_day");
+        $final_day     = $request->get_param("final_day");
+        $leaving_time  = $request->get_param("leaving_time");
 
-        normalize_event_params($event_type, $final_day, $duration);
+        normalize_event_params($event_type, $final_day, $leaving_time);
 
         $validated = validate_event_dates($start_day, $final_day);
         if (is_wp_error($validated)) return $validated;
 
         $wpdb->query("START TRANSACTION");
-
         $result = $wpdb->insert(
             "events",
             [
-                "event_type" => $event_type,
-                "user_id"    => $user_id,
-                "start_day"  => $start_day,
-                "final_day"  => $final_day,
-                "duration"   => $duration,
+                "event_type"     => $event_type,
+                "user_id"        => $user_id,
+                "start_day"      => $start_day,
+                "final_day"      => $final_day,
+                "leaving_time"   => $leaving_time,
             ],
-            ["%d", "%d", "%s", "%s", "%d"]
+            ["%d", "%d", "%s", "%s", "%s"]
         );
 
         if ($result === false) return rollback_error("db_error", $wpdb->last_error);
@@ -776,7 +775,7 @@
         $event_id = $wpdb->insert_id;
         [$new_event_type_name, $new_user_name] = resolve_event_audit_fields($event_type, $user_id);
         $logged = insert_audit_log("CRE", "events", $event_id, null,
-            format_audit_data([$new_user_name, $new_event_type_name, $start_day, $final_day, $duration]));
+            format_audit_data([$new_user_name, $new_event_type_name, $start_day, $final_day, $leaving_time]));
 
         if (!$logged) return rollback_error("db_error", "Failed to write audit log");
 
@@ -795,7 +794,7 @@
         $wpdb->query("START TRANSACTION");
 
         $old_row = $wpdb->get_row($wpdb->prepare(
-            "SELECT u.ID, et.event_name, e.start_day, e.final_day, e.duration
+            "SELECT u.ID, et.event_name, e.start_day, e.final_day, e.leaving_time
              FROM events e
              JOIN event_types et    ON e.event_type = et.event_type_id
              JOIN {$wpdb->users} u  ON e.user_id    = u.ID
@@ -830,15 +829,15 @@
         $user_id    = $request->get_param("user_id");
         $start_day  = $request->get_param("start_day");
         $final_day  = $request->get_param("final_day");
-        $duration   = $request->get_param("duration");
+        $leaving_time   = $request->get_param("leaving_time");
 
-        normalize_event_params($event_type, $final_day, $duration);
+        normalize_event_params($event_type, $final_day, $leaving_time);
 
         $validated = validate_event_dates($start_day, $final_day);
         if (is_wp_error($validated)) return $validated;
 
         $old_row = $wpdb->get_row($wpdb->prepare(
-            "SELECT u.ID, et.event_name, e.start_day, e.final_day, e.duration
+            "SELECT u.ID, et.event_name, e.start_day, e.final_day, e.leaving_time
              FROM events e
              JOIN event_types et    ON e.event_type = et.event_type_id
              JOIN {$wpdb->users} u  ON e.user_id    = u.ID
@@ -853,14 +852,14 @@
         $result = $wpdb->update(
             "events",
             [
-                "event_type" => $event_type,
-                "user_id"    => $user_id,
-                "start_day"  => $start_day,
-                "final_day"  => $final_day,
-                "duration"   => $duration,
+                "event_type"     => $event_type,
+                "user_id"        => $user_id,
+                "start_day"      => $start_day,
+                "final_day"      => $final_day,
+                "leaving_time"   => $leaving_time,
             ],
             ["event_id" => $event_id],
-            ["%d", "%d", "%s", "%s", "%d"],
+            ["%d", "%d", "%s", "%s", "%s"],
             ["%d"]
         );
 
@@ -870,7 +869,7 @@
         $old_user_name = resolve_user_name($old_row["ID"]);
         $logged = insert_audit_log("MOD", "events", $event_id,
             format_audit_data([$old_user_name, ...array_slice($old_row, 1)]),
-            format_audit_data([$new_user_name, $new_event_type_name, $start_day, $final_day, $duration]));
+            format_audit_data([$new_user_name, $new_event_type_name, $start_day, $final_day, $leaving_time]));
 
         if (!$logged) return rollback_error("db_error", "Failed to write audit log");
 

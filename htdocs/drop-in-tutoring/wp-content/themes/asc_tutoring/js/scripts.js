@@ -108,7 +108,7 @@ const EVENT_TYPE_KEYS = {
 function buildEventRow(e) {
   const typeKey      = EVENT_TYPE_KEYS[e.event_type];
   const finalDay     = typeKey === 'called_out'    ? formatDisplayDate(e.final_day) : '-';
-  const duration     = typeKey === 'leaving_early' ? e.duration                     : '-';
+  const leavingTime = typeKey === 'leaving_early' ? e.leaving_time                 : '-';
 
   const userRow  = document.querySelector(`#account-table tr[data-user-id="${e.user_id}"]`);
   const nameCell = userRow?.children[1]?.textContent?.trim();
@@ -125,13 +125,13 @@ function buildEventRow(e) {
       data-event-type="${e.event_type}"
       data-start-day="${e.start_day}"
       data-final-day="${e.final_day || ''}"
-      data-duration="${e.duration || ''}"
+      data-leaving-time="${e.leaving_time || ''}"
     >
       <td>${userLabel}</td>
       <td>${eventTypeLabel}</td>
       <td>${formatDisplayDate(e.start_day)}</td>
       <td>${finalDay}</td>
-      <td>${duration}</td>
+      <td>${leavingTime}</td>
       <td>
         <button type="button" class="button button-primary admin-edit-event">Edit</button>
         <button type="button" class="button button-secondary admin-delete-event">Delete</button>
@@ -641,10 +641,10 @@ function loadEventIntoForm(row, setEventFormMode) {
   s2set('event_type',    row.dataset.eventType);
   toggleEventFields();
   setVal('event_id',      row.dataset.eventId);
-  s2set('event_user_id', row.dataset.userId);
+  s2set('event_user_id',  row.dataset.userId);
   setVal('start_day',     row.dataset.startDay);
   setVal('final_day',     row.dataset.finalDay);
-  s2set('duration',      row.dataset.duration ? row.dataset.duration.padStart(2, '0') : '');
+  s2set('leaving_time',   row.dataset.leavingTime ? row.dataset.leavingTime.padStart(2, '0') : '');
   setEventFormMode('edit');
 }
 
@@ -865,10 +865,10 @@ function initAdminUI() {
     eventForm.reset();
     s2reset('event_user_id');
     s2reset('event_type');
-    s2reset('duration');
     $('event_type').selectedIndex = 0;
     toggleEventFields();
     $('event_id').value = '';
+    $('leaving_time').value = '';
     setEventFormMode('add');
   }
 
@@ -1047,13 +1047,12 @@ function initAdminUI() {
 
     const existingScheduleRows = Array.from($$('#schedule-table tbody tr'));
     for (const row of existingScheduleRows) {
-      if (id && row.dataset.scheduleId === id) continue; // skip self when editing
+      if (id && row.dataset.scheduleId === id) continue;
       if (Number(row.dataset.userId)   !== payload.user_id)   continue;
       if (Number(row.dataset.courseId) !== payload.course_id) continue;
       const DAY_UNABBR = { MON: 'Monday', TUE: 'Tuesday', WED: 'Wednesday', THU: 'Thursday', FRI: 'Friday' };
       const rowDay = DAY_UNABBR[row.dataset.dayOfWeek] || row.dataset.dayOfWeek;
       if (rowDay !== payload.day_of_week) continue;
-      // Times overlap if new start < existing end AND new end > existing start (no touching allowed)
       const rowStart = row.dataset.startTime;
       const rowEnd   = row.dataset.endTime;
       if (payload.start_time < rowEnd && payload.end_time > rowStart) {
@@ -1110,11 +1109,11 @@ function initAdminUI() {
     const payload = {
       user_id:    Number($('event_user_id').value),
       event_type: Number($('event_type').value),
-      start_day:  $('start_day').value,
-      final_day:  $('final_day').value   || null,
-      duration:   $('duration').value    ? Number($('duration').value) : null,
+      start_day:    $('start_day').value,
+      final_day:    $('final_day').value    || null,
+      leaving_time: $('leaving_time').value ? $('leaving_time').value + ":00": null,
     };
-
+    console.log(leaving_time);
     if (payload.final_day && payload.start_day && payload.final_day < payload.start_day) {
       showMessage('Error: Final Day must be the same as or after Start Day.', 'error'); return;
     }
@@ -1257,7 +1256,7 @@ function initAdminUI() {
     clearVal('event_id');
     s2reset('event_user_id');
     s2reset('event_type');
-    s2reset('duration');
+    s2reset('leaving_time');
     $('event_type').selectedIndex = 0;
     toggleEventFields();
     setEventFormMode('add');
@@ -1288,9 +1287,9 @@ function initEventFields() {
   const eventType       = $('event_type');
   if (!eventType) return;
 
-  const dateRangeFields = $('date-range-fields');
-  const durationField   = $('duration-field');
-  const today           = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const dateRangeFields   = $('date-range-fields');
+  const leavingEarlyField = $('leaving-early-field');
+  const today             = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
   const hideFieldGroup = (group, defaultDate = '') => {
     group.style.display = 'none';
@@ -1308,12 +1307,12 @@ function initEventFields() {
     const leavingEarly = selectedText.includes('leaving early');
 
     if (!calledOut)    hideFieldGroup(dateRangeFields, today);
-    if (!leavingEarly) hideFieldGroup(durationField);
+    if (!leavingEarly) hideFieldGroup(leavingEarlyField);
     if (calledOut) {
       showFieldGroup(dateRangeFields);
       dateRangeFields.querySelectorAll('input').forEach(i => { i.value = ''; });
     } else if (leavingEarly) {
-      showFieldGroup(durationField);
+      showFieldGroup(leavingEarlyField);
     }
   };
 
@@ -1780,21 +1779,22 @@ function initLogsUI() {
 
     try {
       const data = await api.request(`/logs`);
-
       logsByDate = {};
       for (const entry of data.logs) {
         if (!logsByDate[entry.date]) logsByDate[entry.date] = [];
         logsByDate[entry.date].push(entry);
       }
-
       allDates   = Object.keys(logsByDate).sort();
       oldestDate = allDates[0] || toDateKey(new Date());
-
       viewer.hidden      = false;
-      exportBtn.hidden   = false;
+      console.log("1");
+      //exportBtn.hidden   = false;
+      console.log("2");
       renderWindow(toDateKey(new Date()));
+      console.log("3");
       showMessage('Logs loaded.');
-
+      console.log("4");
+      
     } catch (err) {
       showMessage('Network error fetching logs.', 'error');
     } finally {
@@ -1820,7 +1820,6 @@ function initLogsUI() {
 const SELECT2_IDS = [
   'event_user_id',
   'event_type',
-  'duration',
   'schedule_user_id',
   'schedule_course_lookup',
   'schedule_day_of_week',

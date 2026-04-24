@@ -42,17 +42,16 @@ foreach ($eventTypes as $eventType) {
           </section>
         <?php else : ?>
 
-          <nav class="tutoring-admin-tabs" aria-label="Admin sections">
-            <?php if ($is_admin) : ?>
-              <button type="button" class="button button-primary admin-tab active" data-tab="events">Tutor Events</button>            
-              <button type="button" class="button button-primary admin-tab" data-tab="schedule">Schedule</button>
-              <button type="button" class="button button-primary admin-tab" data-tab="accounts">Accounts</button>
-              <button type="button" class="button button-primary admin-tab" data-tab="logs">Logs</button>
-              <button type="button" class="button button-primary admin-tab" data-tab="import">Import</button>
-            <?php endif; ?>
-          </nav>
+          <?php if ($is_admin) : ?>
+            <nav class="tutoring-admin-tabs" aria-label="Admin sections">
+                <button type="button" class="button button-primary admin-tab active" data-tab="events">Tutor Events</button>            
+                <button type="button" class="button button-primary admin-tab" data-tab="schedule">Schedule</button>
+                <button type="button" class="button button-primary admin-tab" data-tab="accounts">Accounts</button>
+                <button type="button" class="button button-primary admin-tab" data-tab="import">Bulk Updates</button>
+                <button type="button" class="button button-primary admin-tab" data-tab="logs">Logs</button>
+            </nav>
+          <?php endif; ?>
 
-          <?php if ($is_staff) : ?>
           <section class="admin-section active" id="admin-tab-events">
             <h2>Tutor Events</h2>
             <p>Create, update, and delete tutor events such as late arrivals, call-outs, early departures, and other shift events.</p>
@@ -101,12 +100,9 @@ foreach ($eventTypes as $eventType) {
                     </div>
                   </div>
 
-                  <div id="duration-field">
-                    <label for="duration"><strong>Duration (minutes)</strong></label>
-                    <select id="duration" name="duration">
-                      <option value="">Select duration</option>
-                      <?php tutoring_minute_options(5, true); ?>
-                    </select>
+                  <div id="leaving-early-field">
+                    <label for="leaving_time"><strong>Time</strong></label>
+                    <input type="time" id="leaving_time" name="leaving_time" />
                   </div>
                   
                 </div>
@@ -126,7 +122,7 @@ foreach ($eventTypes as $eventType) {
                     <th>Type</th>
                     <th>Starting Day</th>
                     <th>Final Day</th>
-                    <th>Duration</th>
+                    <th>Time</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -140,7 +136,7 @@ foreach ($eventTypes as $eventType) {
                       data-event-type="<?php echo esc_attr($event['event_type']); ?>"
                       data-start-day="<?php echo esc_attr($event['start_day']); ?>"
                       data-final-day="<?php echo esc_attr($event['final_day'] ?? ''); ?>"
-                      data-duration="<?php echo esc_attr($event['duration'] ?? ''); ?>"
+                      data-leaving-time="<?php echo esc_attr($event['leaving_time'] ?? ''); ?>"
                     >
                       <td><?php echo esc_html($event_user ? tutoring_admin_user_label($event_user) : $event['user_id']); ?></td>
                       <td><?php echo esc_html(display_snake_case($event_type['event_name'] ?? $event['event_type'])); ?></td>
@@ -149,9 +145,9 @@ foreach ($eventTypes as $eventType) {
                       </td>
 
                       <td>
-                        <?php echo esc_html($event['final_day'] ? date('m-d-Y', strtotime($event['final_day'])) : '—'); ?>
+                        <?php echo esc_html($event['final_day'] ? date('m-d-Y', strtotime($event['final_day'])) : '--'); ?>
                       </td>
-                      <td><?php echo esc_html($event['duration'] !== null ? $event['duration'] : '—'); ?></td>
+                      <td><?php echo esc_html($event['leaving_time'] !== null ? tutoring_admin_time_label($event['leaving_time']) : '--'); ?></td>
                       <td>
                         <button type="button" class="button button-primary admin-edit-event">Edit</button>
                         <button type="button" class="button button-secondary admin-delete-event">Delete</button>
@@ -162,309 +158,363 @@ foreach ($eventTypes as $eventType) {
               </table>
             </div>
           </section>
-          <?php endif; ?>
+          
+          <?php if ($is_admin) : ?> 
+            <section class="admin-section" id="admin-tab-schedule">
+              <h2>Schedule Management</h2>
+              <p>Create, update, and delete drop in tutor schedule entries.</p>
+              <section class="admin-subsection">
+                <h3 id="schedule-form-mode-label">Create New Schedule Entry</h3>
+                
 
-          <?php if ($is_admin) : ?>
-          <section class="admin-section" id="admin-tab-schedule">
-            <h2>Schedule Management</h2>
-            <p>Create, update, and delete drop in tutor schedule entries.</p>
-            <section class="admin-subsection">
-              <h3 id="schedule-form-mode-label">Create New Schedule Entry</h3>
-              
+                <form class="tutoring-admin-form" id="schedule-form">
+                  <input type="hidden" id="schedule_id" name="schedule_id" />
 
-              <form class="tutoring-admin-form" id="schedule-form">
-                <input type="hidden" id="schedule_id" name="schedule_id" />
+                  <div class="admin-grid">
+                    <div>
+                      <label for="schedule_user_id"><strong>Tutor</strong></label>
+                      <select id="schedule_user_id" name="user_id" required >
+                        <option value="">Select tutor</option>
+                        <?php foreach ($users as $user) : ?>
+                          <?php if (in_array('tutor', (array) $user['roles'], true)) : ?>
+                            <option value="<?php echo esc_attr($user['user_id']); ?>">
+                              <?php echo esc_html(tutoring_admin_user_label($user)); ?>
+                            </option>
+                          <?php endif; ?>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
 
-                <div class="admin-grid">
-                  <div>
-                    <label for="schedule_user_id"><strong>Tutor</strong></label>
-                    <select id="schedule_user_id" name="user_id" required >
-                      <option value="">Select tutor</option>
-                      <?php foreach ($users as $user) : ?>
-                        <?php if (in_array('tutor', (array) $user['roles'], true)) : ?>
-                          <option value="<?php echo esc_attr($user['user_id']); ?>">
-                            <?php echo esc_html(tutoring_admin_user_label($user)); ?>
+                    <div>
+                      <label for="schedule_course_lookup"><strong>Select Course</strong></label>
+                      <select id="schedule_course_lookup" name="schedule_course_lookup" required >
+                        <option value="">Select a course</option>
+                        <?php foreach ($mCourses as $course) : ?>
+                          <option value="<?php echo esc_attr(json_encode($course)); ?>">
+                            <?php echo esc_html($course['course_subject'] . ' ' . $course['course_code']); ?>
                           </option>
-                        <?php endif; ?>
-                      <?php endforeach; ?>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label for="schedule_course_lookup"><strong>Select Course</strong></label>
-                    <select id="schedule_course_lookup" name="schedule_course_lookup" required >
-                      <option value="">Select a course</option>
-                      <?php foreach ($mCourses as $course) : ?>
-                        <option value="<?php echo esc_attr(json_encode($course)); ?>">
-                          <?php echo esc_html($course['course_subject'] . ' ' . $course['course_code']); ?>
-                        </option>
-                      <?php endforeach; ?>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label for="schedule_day_of_week"><strong>Day</strong></label>
-                    <select id="schedule_day_of_week" name="day_of_week" required>
-                      <option value="">Select day</option>
-                      <option value="Monday">Monday</option>
-                      <option value="Tuesday">Tuesday</option>
-                      <option value="Wednesday">Wednesday</option>
-                      <option value="Thursday">Thursday</option>
-                      <option value="Friday">Friday</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label><strong>Start Time</strong></label>
-                    <div class="time-select-row">
-                      <div class="time-select-col">
-                        <label for="schedule_start_time_hour" class="time-select-label">Hour</label>
-                        <select id="schedule_start_time_hour" aria-label="Start time hour" required>
-                          <option value="">-</option>
-                          <?php tutoring_hour_options(); ?>
-                        </select>
-                      </div>
-
-                      <div class="time-select-col">
-                        <label for="schedule_start_time_minute" class="time-select-label">Minute</label>
-                        <select id="schedule_start_time_minute" aria-label="Start time minute" required>
-                          <option value="">-</option>
-                          <?php tutoring_minute_options(pad: true); ?>
-                        </select>
-                      </div>
-
-                      <div class="time-select-col">
-                        <label for="schedule_start_time_ampm" class="time-select-label">a.m./p.m.</label>
-                        <select id="schedule_start_time_ampm" aria-label="Start time AM or PM" required>
-                          <option value="">-</option>
-                          <option value="a.m.">a.m.</option>
-                          <option value="p.m.">p.m.</option>
-                        </select>
-                      </div>
+                        <?php endforeach; ?>
+                      </select>
                     </div>
 
-                    <input type="hidden" id="schedule_start_time" name="start_time" required />
-                  </div>
-
-                  <div>
-                    <label><strong>End Time</strong></label>
-                    <div class="time-select-row">
-                      <div class="time-select-col">
-                        <label for="schedule_end_time_hour" class="time-select-label">Hour</label>
-                        <select id="schedule_end_time_hour" aria-label="End time hour" required>
-                          <option value="">-</option>
-                          <?php tutoring_hour_options(); ?>
-                        </select>
-                      </div>
-
-                      <div class="time-select-col">
-                        <label for="schedule_end_time_minute" class="time-select-label">Minute</label>
-                        <select id="schedule_end_time_minute" aria-label="End time minute" required>
-                          <option value="">-</option>
-                          <?php tutoring_minute_options(pad: true); ?>
-                        </select>
-                      </div>
-
-                      <div class="time-select-col">
-                        <label for="schedule_end_time_ampm" class="time-select-label">a.m./p.m.</label>
-                        <select id="schedule_end_time_ampm" aria-label="End time AM or PM" required>
-                          <option value="">-</option>
-                          <option value="a.m.">a.m.</option>
-                          <option value="p.m.">p.m.</option>
-                        </select>
-                      </div>
+                    <div>
+                      <label for="schedule_day_of_week"><strong>Day</strong></label>
+                      <select id="schedule_day_of_week" name="day_of_week" required>
+                        <option value="">Select day</option>
+                        <option value="Monday">Monday</option>
+                        <option value="Tuesday">Tuesday</option>
+                        <option value="Wednesday">Wednesday</option>
+                        <option value="Thursday">Thursday</option>
+                        <option value="Friday">Friday</option>
+                      </select>
                     </div>
 
-                    <input type="hidden" id="schedule_end_time" name="end_time" required />
+                    <div>
+                      <label><strong>Start Time</strong></label>
+                      <div class="time-select-row">
+                        <div class="time-select-col">
+                          <label for="schedule_start_time_hour" class="time-select-label">Hour</label>
+                          <select id="schedule_start_time_hour" aria-label="Start time hour" required>
+                            <option value="">-</option>
+                            <?php tutoring_hour_options(); ?>
+                          </select>
+                        </div>
+
+                        <div class="time-select-col">
+                          <label for="schedule_start_time_minute" class="time-select-label">Minute</label>
+                          <select id="schedule_start_time_minute" aria-label="Start time minute" required>
+                            <option value="">-</option>
+                            <?php tutoring_minute_options(pad: true); ?>
+                          </select>
+                        </div>
+
+                        <div class="time-select-col">
+                          <label for="schedule_start_time_ampm" class="time-select-label">a.m./p.m.</label>
+                          <select id="schedule_start_time_ampm" aria-label="Start time AM or PM" required>
+                            <option value="">-</option>
+                            <option value="a.m.">a.m.</option>
+                            <option value="p.m.">p.m.</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <input type="hidden" id="schedule_start_time" name="start_time" required />
+                    </div>
+
+                    <div>
+                      <label><strong>End Time</strong></label>
+                      <div class="time-select-row">
+                        <div class="time-select-col">
+                          <label for="schedule_end_time_hour" class="time-select-label">Hour</label>
+                          <select id="schedule_end_time_hour" aria-label="End time hour" required>
+                            <option value="">-</option>
+                            <?php tutoring_hour_options(); ?>
+                          </select>
+                        </div>
+
+                        <div class="time-select-col">
+                          <label for="schedule_end_time_minute" class="time-select-label">Minute</label>
+                          <select id="schedule_end_time_minute" aria-label="End time minute" required>
+                            <option value="">-</option>
+                            <?php tutoring_minute_options(pad: true); ?>
+                          </select>
+                        </div>
+
+                        <div class="time-select-col">
+                          <label for="schedule_end_time_ampm" class="time-select-label">a.m./p.m.</label>
+                          <select id="schedule_end_time_ampm" aria-label="End time AM or PM" required>
+                            <option value="">-</option>
+                            <option value="a.m.">a.m.</option>
+                            <option value="p.m.">p.m.</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <input type="hidden" id="schedule_end_time" name="end_time" required />
+                    </div>
+
+                    <input type="hidden" id="schedule_course_id" name="course_id" required />
+
                   </div>
 
-                  <input type="hidden" id="schedule_course_id" name="course_id" required />
+                  <details class="admin-details">
+                    <summary><strong>New course</strong> (Search for courses not currently scheduled)</summary>
+                    <div class="admin-grid">
+                      <div class="account-search-wrapper">
+                        <label for="course_search_query"><strong>Search Course</strong></label>
+                        <div class="account-search-row">
+                          <input type="text" id="course_search_query" name="course_search_query" placeholder="Search by subject, code, or name" autocomplete="off" />
+                          <button type="button" class="button button-primary" id="course-search-submit">Search</button>
+                        </div>
+                        <div id="course_search_results" class="account-search-results" hidden>
+                          <p class="account-search-status" id="course-search-status"></p>
+                          <ul class="account-search-list" id="course-search-list"></ul>
+                        </div>
+                        <input type="hidden" id="course_lookup_results" name="course_lookup_results" />
+                      </div>
+                    </div>
+                  </details>
 
-                </div>
+                  <div class="admin-actions">
+                    <button type="submit" class="button button-primary">Save Schedule Entry</button>
+                    <button type="button" class="button button-secondary" id="reset-schedule-form">Clear</button>
+                    <span class="tutoring-admin-message" id="tutoring-admin-message" hidden></span>
+                  </div>
+                </form>
+              </section>
+              <div class="umbc-table-wrapper">
+                <table class="umbc-table admin-table" id="schedule-table">
+                  <thead>
+                    <tr>
+                      <th>Tutor</th>
+                      <th>Course</th>
+                      <th>Day</th>
+                      <th>Start Time</th>
+                      <th>End Time</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php foreach ($mSchedule as $row) : ?>
+                      <?php $schedule_user = $users_by_id[$row['user_id']] ?? null; ?>
+                      <?php $schedule_course = $mCourses[$row['course_id']] ?? null; ?>
+                      <tr
+                        data-schedule-id="<?php echo esc_attr($row['schedule_id']); ?>"
+                        data-user-id="<?php echo esc_attr($row['user_id']); ?>"
+                        data-course-id="<?php echo esc_attr($row['course_id']); ?>"
+                        data-day-of-week="<?php echo esc_attr($row['day_of_week']); ?>"
+                        data-start-time="<?php echo esc_attr($row['start_time']); ?>"
+                        data-end-time="<?php echo esc_attr($row['end_time']); ?>"
+                      >
+                        <td><?php echo esc_html($schedule_user ? tutoring_admin_user_label($schedule_user) : $row['user_id']); ?></td>
+                        <td>
+                          <?php
+                          echo esc_html(
+                            $schedule_course
+                              ? trim($schedule_course['course_subject'] . ' ' . $schedule_course['course_code'] . ' - ' . $schedule_course['course_name'])
+                              : $row['course_id']
+                          );
+                          ?>
+                        </td>
+                        <td><?php echo esc_html(tutoring_day_label($row['day_of_week'])); ?></td>
+                        <td><?php echo esc_html(tutoring_admin_time_label($row['start_time'])); ?></td>
+                        <td><?php echo esc_html(tutoring_admin_time_label($row['end_time'])); ?></td>
+                        <td>
+                          <button type="button" class="button button-primary admin-edit-schedule">Edit</button>
+                          <button type="button" class="button button-secondary admin-delete-schedule">Delete</button>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            </section>
 
-                <details class="admin-details">
-                  <summary><strong>New course</strong> (Search for courses not currently scheduled)</summary>
+            <section class="admin-section" id="admin-tab-accounts">
+              <h2>Account Management</h2>
+              <p>Create local tutoring accounts and update or remove assigned roles.</p>
+              <section class="admin-subsection">
+                <h3 id="account-form-mode-label">Add New Account</h3>
+                <form class="tutoring-admin-form" id="account-form">
+                  <input type="hidden" id="account_user_id" name="user_id" />
                   <div class="admin-grid">
                     <div class="account-search-wrapper">
-                      <label for="course_search_query"><strong>Search Course</strong></label>
+                      <label for="account_search_query"><strong>Search UMBC Account</strong></label>
                       <div class="account-search-row">
-                        <input type="text" id="course_search_query" name="course_search_query" placeholder="Search by subject, code, or name" autocomplete="off" />
-                        <button type="button" class="button button-primary" id="course-search-submit">Search</button>
+                        <input type="text" id="account_search_query" name="account_search_query" placeholder="Search by name, ID, or email" autocomplete="off" />
+                        <button type="button" class="button button-primary" id="account-search-submit">Search</button>
                       </div>
-                      <div id="course_search_results" class="account-search-results" hidden>
-                        <p class="account-search-status" id="course-search-status"></p>
-                        <ul class="account-search-list" id="course-search-list"></ul>
+                      <div id="account_search_results" class="account-search-results" hidden>
+                        <p class="account-search-status" id="account-search-status"></p>
+                        <ul class="account-search-list" id="account-search-list"></ul>
                       </div>
-                      <input type="hidden" id="course_lookup_results" name="course_lookup_results" />
+                      <input type="hidden" id="account_lookup_results" name="account_lookup_results" />
                     </div>
                   </div>
-                </details>
 
-                <div class="admin-actions">
-                  <button type="submit" class="button button-primary">Save Schedule Entry</button>
-                  <button type="button" class="button button-secondary" id="reset-schedule-form">Clear</button>
-                  <span class="tutoring-admin-message" id="tutoring-admin-message" hidden></span>
-                </div>
-              </form>
-            </section>
-            <div class="umbc-table-wrapper">
-              <table class="umbc-table admin-table" id="schedule-table">
-                <thead>
-                  <tr>
-                    <th>Tutor</th>
-                    <th>Course</th>
-                    <th>Day</th>
-                    <th>Start Time</th>
-                    <th>End Time</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php foreach ($mSchedule as $row) : ?>
-                    <?php $schedule_user = $users_by_id[$row['user_id']] ?? null; ?>
-                    <?php $schedule_course = $mCourses[$row['course_id']] ?? null; ?>
-                    <tr
-                      data-schedule-id="<?php echo esc_attr($row['schedule_id']); ?>"
-                      data-user-id="<?php echo esc_attr($row['user_id']); ?>"
-                      data-course-id="<?php echo esc_attr($row['course_id']); ?>"
-                      data-day-of-week="<?php echo esc_attr($row['day_of_week']); ?>"
-                      data-start-time="<?php echo esc_attr($row['start_time']); ?>"
-                      data-end-time="<?php echo esc_attr($row['end_time']); ?>"
-                    >
-                      <td><?php echo esc_html($schedule_user ? tutoring_admin_user_label($schedule_user) : $row['user_id']); ?></td>
-                      <td>
-                        <?php
-                        echo esc_html(
-                          $schedule_course
-                            ? trim($schedule_course['course_subject'] . ' ' . $schedule_course['course_code'] . ' - ' . $schedule_course['course_name'])
-                            : $row['course_id']
-                        );
-                        ?>
-                      </td>
-                      <td><?php echo esc_html(tutoring_day_label($row['day_of_week'])); ?></td>
-                      <td><?php echo esc_html(tutoring_admin_time_label($row['start_time'])); ?></td>
-                      <td><?php echo esc_html(tutoring_admin_time_label($row['end_time'])); ?></td>
-                      <td>
-                        <button type="button" class="button button-primary admin-edit-schedule">Edit</button>
-                        <button type="button" class="button button-secondary admin-delete-schedule">Delete</button>
-                      </td>
+                  <div class="admin-grid">
+                    <div>
+                      <label for="user_login"><strong>UMBC ID</strong></label>
+                      <input type="text" id="user_login" name="user_login" placeholder="AB12345" readonly disabled />
+                    </div>
+
+                    <div>
+                      <label for="user_email"><strong>Email</strong></label>
+                      <input type="email" id="user_email" name="user_email" placeholder="student@umbc.edu" readonly disabled/>
+                    </div>
+
+                    <div>
+                      <label for="first_name"><strong>First Name</strong></label>
+                      <input type="text" id="first_name" name="first_name" readonly disabled/>
+                    </div>
+
+                    <div>
+                      <label for="last_name"><strong>Last Name</strong></label>
+                      <input type="text" id="last_name" name="last_name" readonly disabled/>
+                    </div>
+
+                    <fieldset class="admin-role-box">
+                      <legend><strong>Roles</strong></legend>
+                      <div class="admin-role-options">
+                        <label><input type="checkbox" name="roles[]" value="tutor" /> Tutor</label>
+                        <label><input type="checkbox" name="roles[]" value="asc_staff" /> Staff</label>
+                        <label><input type="checkbox" name="roles[]" value="asc_admin" /> Admin</label>
+                      </div>
+                    </fieldset>
+                  </div>
+
+                  <div class="admin-actions">
+                    <button type="submit" class="button button-primary">Save Account</button>
+                    <button type="button" class="button button-secondary" id="reset-account-form">Clear</button>
+                    <span class="tutoring-admin-message" id="tutoring-admin-message" hidden></span>
+                  </div>
+                </form>
+              </section>
+
+              <div class="umbc-table-wrapper">
+                <table class="umbc-table admin-table" id="account-table">
+                  <thead>
+                    <tr>
+                      <th>UMBC ID</th>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Actions</th>
                     </tr>
-                  <?php endforeach; ?>
-                </tbody>
-              </table>
-            </div>
-          </section>
+                  </thead>
+                  <tbody>
+                    <?php foreach ($users as $user) : ?>
+                      <tr
+                        data-user-id="<?php echo esc_attr($user['user_id']); ?>"
+                        data-user-login="<?php echo esc_attr($user['user_login']); ?>"
+                        data-user-email="<?php echo esc_attr($user['user_email']); ?>"
+                        data-first-name="<?php echo esc_attr($user['first_name']); ?>"
+                        data-last-name="<?php echo esc_attr($user['last_name']); ?>"
+                        data-roles="<?php echo esc_attr(implode(',', $user['roles'] ?? [])); ?>"
+                      >
+                        <td><?php echo esc_html($user['user_login']); ?></td>
+                        <td><?php echo esc_html(trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''))); ?></td>
+                        <td><?php echo esc_html($user['user_email']); ?></td>
+                        <td><?php echo esc_html(display_roles($user['roles'])); ?></td>
+                        <td>
+                          <button type="button" class="button button-primary admin-edit-account">Edit</button>
+                          <button type="button" class="button button-secondary admin-delete-account">Delete</button>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            
+            <section class="admin-section" id="admin-tab-import">
+              <h2>Import</h2>
+              <p>Import a tutoring schedule from a CSV file or remove all schedule entries for a specific course.</p>
 
-          <section class="admin-section" id="admin-tab-accounts">
-            <h2>Account Management</h2>
-            <p>Create local tutoring accounts and update or remove assigned roles.</p>
-            <section class="admin-subsection">
-              <h3 id="account-form-mode-label">Add New Account</h3>
-              <form class="tutoring-admin-form" id="account-form">
-                <input type="hidden" id="account_user_id" name="user_id" />
-                <div class="admin-grid">
-                  <div class="account-search-wrapper">
-                    <label for="account_search_query"><strong>Search UMBC Account</strong></label>
-                    <div class="account-search-row">
-                      <input type="text" id="account_search_query" name="account_search_query" placeholder="Search by name, ID, or email" autocomplete="off" />
-                      <button type="button" class="button button-primary" id="account-search-submit">Search</button>
-                    </div>
-                    <div id="account_search_results" class="account-search-results" hidden>
-                      <p class="account-search-status" id="account-search-status"></p>
-                      <ul class="account-search-list" id="account-search-list"></ul>
-                    </div>
-                    <input type="hidden" id="account_lookup_results" name="account_lookup_results" />
-                  </div>
+              <section class="admin-subsection">
+                <h3>Import Schedule</h3>
+                <p>Upload a CSV file to bulk import schedule entries. Download the template below to ensure your file is formatted correctly.</p>
+                <div class="admin-actions" style="margin-top: 0;">
+                  <a href="#" class="button button-secondary" id="import-download-template">Download CSV Template</a>
                 </div>
-
-                <div class="admin-grid">
-                  <div>
-                    <label for="user_login"><strong>UMBC ID</strong></label>
-                    <input type="text" id="user_login" name="user_login" placeholder="AB12345" readonly disabled />
-                  </div>
-
-                  <div>
-                    <label for="user_email"><strong>Email</strong></label>
-                    <input type="email" id="user_email" name="user_email" placeholder="student@umbc.edu" readonly disabled/>
-                  </div>
-
-                  <div>
-                    <label for="first_name"><strong>First Name</strong></label>
-                    <input type="text" id="first_name" name="first_name" readonly disabled/>
-                  </div>
-
-                  <div>
-                    <label for="last_name"><strong>Last Name</strong></label>
-                    <input type="text" id="last_name" name="last_name" readonly disabled/>
-                  </div>
-
-                  <fieldset class="admin-role-box">
-                    <legend><strong>Roles</strong></legend>
-                    <div class="admin-role-options">
-                      <label><input type="checkbox" name="roles[]" value="tutor" /> Tutor</label>
-                      <label><input type="checkbox" name="roles[]" value="asc_staff" /> Staff</label>
-                      <label><input type="checkbox" name="roles[]" value="asc_admin" /> Admin</label>
+                <form class="tutoring-admin-form" id="import-form">
+                  <div class="admin-grid">
+                    <div>
+                      <label for="csv_file"><strong>Select CSV File</strong></label>
+                      <input type="file" id="csv_file" name="csv_file" accept=".csv" />
                     </div>
-                  </fieldset>
-                </div>
+                  </div>
+                  <div class="admin-actions">
+                    <button type="submit" class="button button-primary">Upload</button>
+                    <span class="tutoring-admin-message" id="import-message" hidden></span>
+                  </div>
+                </form>
+              </section>
 
-                <div class="admin-actions">
-                  <button type="submit" class="button button-primary">Save Account</button>
-                  <button type="button" class="button button-secondary" id="reset-account-form">Clear</button>
-                  <span class="tutoring-admin-message" id="tutoring-admin-message" hidden></span>
+              <section class="admin-subsection">
+                <h3>Delete Schedule Entries by Course</h3>
+                <p>Select a course below and delete all associated schedule entries. This action cannot be undone.</p>
+                <div class="umbc-table-wrapper">
+                  <table class="umbc-table admin-table" id="import-course-table">
+                    <thead>
+                      <tr>
+                        <th>Subject</th>
+                        <th>Course ID</th>
+                        <th>Course Name</th>
+                        <th>Times Offered</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <?php foreach ($mCourses as $course) : ?>
+                        <tr data-course-id="<?php echo esc_attr($course['course_id']); ?>">
+                          <td><?php echo esc_html($course['course_subject']); ?></td>
+                          <td><?php echo esc_html($course['course_subject'] . ' ' . $course['course_code']); ?></td>
+                          <td><?php echo esc_html($course['course_name']); ?></td>
+                          <td><?php echo esc_html($course['times_offered'] ?? '--'); ?></td>
+                          <td>
+                            <button type="button" class="button button-secondary admin-delete-course-schedule">Delete</button>
+                          </td>
+                        </tr>
+                      <?php endforeach; ?>
+                    </tbody>
+                  </table>
                 </div>
-              </form>
+              </section>
             </section>
 
-            <div class="umbc-table-wrapper">
-              <table class="umbc-table admin-table" id="account-table">
-                <thead>
-                  <tr>
-                    <th>UMBC ID</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php foreach ($users as $user) : ?>
-                    <tr
-                      data-user-id="<?php echo esc_attr($user['user_id']); ?>"
-                      data-user-login="<?php echo esc_attr($user['user_login']); ?>"
-                      data-user-email="<?php echo esc_attr($user['user_email']); ?>"
-                      data-first-name="<?php echo esc_attr($user['first_name']); ?>"
-                      data-last-name="<?php echo esc_attr($user['last_name']); ?>"
-                      data-roles="<?php echo esc_attr(implode(',', $user['roles'] ?? [])); ?>"
-                    >
-                      <td><?php echo esc_html($user['user_login']); ?></td>
-                      <td><?php echo esc_html(trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''))); ?></td>
-                      <td><?php echo esc_html($user['user_email']); ?></td>
-                      <td><?php echo esc_html(display_roles($user['roles'])); ?></td>
-                      <td>
-                        <button type="button" class="button button-primary admin-edit-account">Edit</button>
-                        <button type="button" class="button button-secondary admin-delete-account">Delete</button>
-                      </td>
-                    </tr>
-                  <?php endforeach; ?>
-                </tbody>
-              </table>
-            </div>
-          </section>
-          <?php endif; ?>
-          
-          <?php if ($is_admin) : ?>
             <section class="admin-section" id="admin-tab-logs">
               <h2>Audit Logs</h2>
               <p>View a record of administrative actions taken in 7 day increments. 
-                 Use the navigation buttons to move between data ranges or the Jump to Date dropdown to directly go to a date.
-                 Export logs to download a .txt file of all stored logs.
+                  Use the navigation buttons to move between data ranges or the Jump to Date dropdown to directly go to a date.
+                  Export logs to download a .txt file of all stored logs.
               </p>
 
               <div class="admin-actions">
-              <button type="button" class="button button-primary" id="logs-fetch-btn">Fetch Logs</button>
-              <span class="tutoring-admin-message" id="logs-message" hidden></span>
-            </div>
+                <button type="button" class="button button-primary" id="logs-fetch-btn">Fetch Logs</button>
+                <button type="button" class="button button-secondary" id="logs-export-btn" hidden>Export Logs</button>
+                <span class="tutoring-admin-message" id="logs-message" hidden></span>
+              </div>
 
               <div class="logs-viewer" id="logs-viewer" hidden>
                 <div class="logs-nav">
@@ -485,63 +535,6 @@ foreach ($eventTypes as $eventType) {
               </div>
             </section>
           <?php endif; ?>
-          <?php if ($is_admin) : ?>
-          <section class="admin-section" id="admin-tab-import">
-            <h2>Import</h2>
-            <p>Import a tutoring schedule from a CSV file or remove all schedule entries for a specific course.</p>
-
-            <section class="admin-subsection">
-              <h3>Import Schedule</h3>
-              <p>Upload a CSV file to bulk import schedule entries. Download the template below to ensure your file is formatted correctly.</p>
-              <div class="admin-actions" style="margin-top: 0;">
-                <a href="#" class="button button-secondary" id="import-download-template">Download CSV Template</a>
-              </div>
-              <form class="tutoring-admin-form" id="import-form">
-                <div class="admin-grid">
-                  <div>
-                    <label for="csv_file"><strong>Select CSV File</strong></label>
-                    <input type="file" id="csv_file" name="csv_file" accept=".csv" />
-                  </div>
-                </div>
-                <div class="admin-actions">
-                  <button type="submit" class="button button-primary">Upload</button>
-                  <span class="tutoring-admin-message" id="import-message" hidden></span>
-                </div>
-              </form>
-            </section>
-
-            <section class="admin-subsection">
-              <h3>Delete Schedule Entries by Course</h3>
-              <p>Select a course below and delete all associated schedule entries. This action cannot be undone.</p>
-              <div class="umbc-table-wrapper">
-                <table class="umbc-table admin-table" id="import-course-table">
-                  <thead>
-                    <tr>
-                      <th>Subject</th>
-                      <th>Course ID</th>
-                      <th>Course Name</th>
-                      <th>Times Offered</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <?php foreach ($mCourses as $course) : ?>
-                      <tr data-course-id="<?php echo esc_attr($course['course_id']); ?>">
-                        <td><?php echo esc_html($course['course_subject']); ?></td>
-                        <td><?php echo esc_html($course['course_subject'] . ' ' . $course['course_code']); ?></td>
-                        <td><?php echo esc_html($course['course_name']); ?></td>
-                        <td><?php echo esc_html($course['times_offered'] ?? '—'); ?></td>
-                        <td>
-                          <button type="button" class="button button-secondary admin-delete-course-schedule">Delete</button>
-                        </td>
-                      </tr>
-                    <?php endforeach; ?>
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </section>
-          <?php endif; ?>
         <?php endif; ?>
       </div>
     </article>
@@ -549,6 +542,9 @@ foreach ($eventTypes as $eventType) {
 </main>
 
 <style>
+[hidden] {
+  display: none !important;
+}
 .tutoring-admin-tabs,
 .admin-actions {
   display: flex;
